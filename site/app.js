@@ -524,6 +524,8 @@ function normalizeAnnotation(raw = {}) {
       main: compactSpaces(headOverride.main || raw.mainOverride || ""),
       sub: compactSpaces(headOverride.sub || raw.subOverride || ""),
     },
+    titleOverride: compactSpaces(raw.titleOverride || raw.objectOverride || raw.vesselOverride || ""),
+    imageOverride: normalizeImageOverride(raw.imageOverride || raw.glyphImageOverride || raw.imageData || null),
     xieshengDomain: compactSpaces(raw.xieshengDomain || raw.domain || "").toUpperCase(),
     phoneticInitials: Array.isArray(phoneticSource)
       ? phoneticSource
@@ -551,6 +553,8 @@ function hasAnnotation(annotation) {
     annotation &&
       (annotation.headOverride?.main ||
         annotation.headOverride?.sub ||
+        annotation.titleOverride ||
+        annotation.imageOverride?.dataUrl ||
         annotation.xieshengDomain ||
         annotation.phoneticInitials?.length ||
         annotation.semanticComponents?.length ||
@@ -559,12 +563,37 @@ function hasAnnotation(annotation) {
   );
 }
 
+function normalizeImageOverride(raw) {
+  if (!raw) {
+    return null;
+  }
+  const dataUrl = typeof raw === "string" ? raw : raw.dataUrl || raw.url || "";
+  if (!/^data:image\//i.test(dataUrl)) {
+    return null;
+  }
+  return {
+    dataUrl,
+    name: compactSpaces(raw.name || ""),
+    type: compactSpaces(raw.type || ""),
+    size: Number(raw.size || 0) || 0,
+    updatedAt: compactSpaces(raw.updatedAt || ""),
+  };
+}
+
 function displayMain(record) {
   return record.annotation?.headOverride?.main || record.main;
 }
 
 function displaySub(record) {
   return record.annotation?.headOverride?.sub || record.sub;
+}
+
+function displayTitle(record) {
+  return record.annotation?.titleOverride || record.title;
+}
+
+function displayImage(record) {
+  return record.annotation?.imageOverride?.dataUrl || record.image;
 }
 
 function phoneticText(annotation) {
@@ -776,6 +805,7 @@ function prepareRecords(records) {
     const annotation = state.annotations[record.id] || null;
     const main = annotation?.headOverride?.main || record.main;
     const sub = annotation?.headOverride?.sub || record.sub;
+    const title = annotation?.titleOverride || record.title;
     const componentChars = [...new Set(stripCidPlaceholders(record.componentHead).split("").filter((char) => !/\s/.test(char)))];
     return {
       ...record,
@@ -787,7 +817,7 @@ function prepareRecords(records) {
           " "
         )
       ),
-      searchObject: normalize([stripCidPlaceholders(record.title), stripCidPlaceholders(record.source)].join(" ")),
+      searchObject: normalize([stripCidPlaceholders(title), stripCidPlaceholders(record.title), stripCidPlaceholders(record.source)].join(" ")),
       searchComponent: normalize(
         componentChars
           .map((char) => [char, state.chars[char] || "", state.puaIds[char] || ""].join(" "))
@@ -882,8 +912,8 @@ function maybeAutoLoadResults() {
 function renderRecord(record) {
   const node = els.template.content.firstElementChild.cloneNode(true);
   const image = node.querySelector(".glyph-image");
-  image.src = record.image;
-  image.alt = `${displayMain(record) || ""} ${displaySub(record) || ""} ${record.title || ""}`.trim();
+  image.src = displayImage(record);
+  image.alt = `${displayMain(record) || ""} ${displaySub(record) || ""} ${displayTitle(record) || ""}`.trim();
 
   const main = node.querySelector(".main-token");
   setTokenLabel(main, "main", displayMain(record));
@@ -892,7 +922,7 @@ function renderRecord(record) {
   setTokenLabel(sub, "sub", displaySub(record));
 
   node.querySelector(".period-pill").textContent = record.period ? localizedPeriod(record.period) : t("periodMissing");
-  setRichText(node.querySelector(".record-title"), record.title, t("objectMissing"));
+  setRichText(node.querySelector(".record-title"), displayTitle(record), t("objectMissing"));
   node.querySelector(".source-line").textContent = record.source || t("sourceMissing");
 
   const pageParts = [record.book ? localizedBook(record.book) : ""].filter(Boolean);
@@ -961,7 +991,7 @@ function renderCompactRecord(record) {
   node.title = [
     tokenLabel("main", displayMain(record)),
     tokenLabel("sub", displaySub(record)),
-    record.title || t("objectMissing"),
+    displayTitle(record) || t("objectMissing"),
     record.source || t("sourceMissing"),
   ].join(" · ");
   node.setAttribute("aria-label", node.title);
@@ -971,8 +1001,8 @@ function renderCompactRecord(record) {
   const image = document.createElement("img");
   image.className = "compact-glyph-image";
   image.loading = "lazy";
-  image.src = record.image;
-  image.alt = `${displayMain(record) || ""} ${displaySub(record) || ""} ${record.title || ""}`.trim();
+  image.src = displayImage(record);
+  image.alt = `${displayMain(record) || ""} ${displaySub(record) || ""} ${displayTitle(record) || ""}`.trim();
   frame.append(image);
 
   const period = document.createElement("div");

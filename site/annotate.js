@@ -72,8 +72,12 @@ const els = {
   selectedHeads: document.querySelector("#selectedHeads"),
   selectedSource: document.querySelector("#selectedSource"),
   selectedPages: document.querySelector("#selectedPages"),
+  titleOverride: document.querySelector("#titleOverride"),
   mainOverride: document.querySelector("#mainOverride"),
   subOverride: document.querySelector("#subOverride"),
+  imageOverrideInput: document.querySelector("#imageOverrideInput"),
+  clearImageOverride: document.querySelector("#clearImageOverride"),
+  imageOverrideState: document.querySelector("#imageOverrideState"),
   xieshengDomain: document.querySelector("#xieshengDomain"),
   semanticComponents: document.querySelector("#semanticComponents"),
   phoneticRows: document.querySelector("#phoneticRows"),
@@ -188,6 +192,8 @@ function normalizeAnnotation(raw = {}) {
       main: compactSpaces(headOverride.main || raw.mainOverride || ""),
       sub: compactSpaces(headOverride.sub || raw.subOverride || ""),
     },
+    titleOverride: compactSpaces(raw.titleOverride || raw.objectOverride || raw.vesselOverride || ""),
+    imageOverride: normalizeImageOverride(raw.imageOverride || raw.glyphImageOverride || raw.imageData || null),
     xieshengDomain: compactSpaces(raw.xieshengDomain || raw.domain || "").toUpperCase(),
     phoneticInitials: Array.isArray(phoneticSource)
       ? phoneticSource
@@ -215,12 +221,31 @@ function hasAnnotation(annotation) {
     annotation &&
       (annotation.headOverride?.main ||
         annotation.headOverride?.sub ||
+        annotation.titleOverride ||
+        annotation.imageOverride?.dataUrl ||
         annotation.xieshengDomain ||
         annotation.phoneticInitials?.length ||
         annotation.semanticComponents?.length ||
         annotation.words?.length ||
         annotation.note)
   );
+}
+
+function normalizeImageOverride(raw) {
+  if (!raw) {
+    return null;
+  }
+  const dataUrl = typeof raw === "string" ? raw : raw.dataUrl || raw.url || "";
+  if (!/^data:image\//i.test(dataUrl)) {
+    return null;
+  }
+  return {
+    dataUrl,
+    name: compactSpaces(raw.name || ""),
+    type: compactSpaces(raw.type || ""),
+    size: Number(raw.size || 0) || 0,
+    updatedAt: compactSpaces(raw.updatedAt || ""),
+  };
 }
 
 function displayMain(record) {
@@ -231,6 +256,14 @@ function displaySub(record) {
   return state.annotations[record.id]?.headOverride?.sub || record.sub;
 }
 
+function displayTitle(record) {
+  return state.annotations[record.id]?.titleOverride || record.title;
+}
+
+function displayImage(record) {
+  return state.annotations[record.id]?.imageOverride?.dataUrl || record.image;
+}
+
 function annotationText(annotation) {
   if (!annotation) {
     return "";
@@ -238,6 +271,7 @@ function annotationText(annotation) {
   return [
     annotation.headOverride?.main,
     annotation.headOverride?.sub,
+    annotation.titleOverride,
     annotation.xieshengDomain,
     ...(annotation.semanticComponents || []),
     ...(annotation.phoneticInitials || []).flatMap((item) => [item.primary, ...(item.secondary || [])]),
@@ -256,6 +290,7 @@ function recordSearchText(record) {
       stripCidPlaceholders(record.sub),
       stripCidPlaceholders(displayMain(record)),
       stripCidPlaceholders(displaySub(record)),
+      stripCidPlaceholders(displayTitle(record)),
       stripCidPlaceholders(record.title),
       stripCidPlaceholders(record.source),
       record.book,
@@ -391,9 +426,9 @@ function renderListItem(record) {
   node.dataset.id = record.id;
   node.classList.toggle("active", record.id === state.selectedId);
   const image = node.querySelector(".annotation-list-image");
-  image.src = record.image;
-  image.alt = `${displayMain(record) || ""} ${displaySub(record) || ""} ${record.title || ""}`.trim();
-  setRichText(node.querySelector(".annotation-item-title"), record.title, "器名未標註");
+  image.src = displayImage(record);
+  image.alt = `${displayMain(record) || ""} ${displaySub(record) || ""} ${displayTitle(record) || ""}`.trim();
+  setRichText(node.querySelector(".annotation-item-title"), displayTitle(record), "器名未標註");
   const meta = node.querySelector(".annotation-item-meta");
   meta.replaceChildren();
   appendRichText(meta, `主:${displayMain(record) || "未標註"} · 子:${displaySub(record) || "未標註"}`);
@@ -426,14 +461,18 @@ function renderEditor() {
 
   state.renderingEditor = true;
   const annotation = state.annotations[record.id] || normalizeAnnotation();
-  els.selectedGlyphImage.src = record.image;
-  els.selectedGlyphImage.alt = `${displayMain(record) || ""} ${displaySub(record) || ""} ${record.title || ""}`.trim();
-  setRichText(els.selectedTitle, record.title, "器名未標註");
+  els.selectedGlyphImage.src = displayImage(record);
+  els.selectedGlyphImage.alt = `${displayMain(record) || ""} ${displaySub(record) || ""} ${displayTitle(record) || ""}`.trim();
+  setRichText(els.selectedTitle, displayTitle(record), "器名未標註");
   els.selectedHeads.replaceChildren();
   els.selectedHeads.append(document.createTextNode("主字頭："));
   appendRichText(els.selectedHeads, record.main || "未標註");
   els.selectedHeads.append(document.createTextNode(" · 子字頭："));
   appendRichText(els.selectedHeads, record.sub || "未標註");
+  if (annotation.titleOverride) {
+    els.selectedHeads.append(document.createTextNode(" · 原器名："));
+    appendRichText(els.selectedHeads, record.title || "未標註");
+  }
   els.selectedHeads.append(document.createTextNode(` · 記錄 ID：${record.id}`));
   els.selectedSource.textContent = [record.source, record.period, record.book].filter(Boolean).join(" · ");
   els.selectedPages.textContent = [
@@ -444,6 +483,7 @@ function renderEditor() {
     .filter(Boolean)
     .join(" · ");
 
+  els.titleOverride.value = annotation.titleOverride || "";
   els.mainOverride.value = annotation.headOverride?.main || "";
   els.subOverride.value = annotation.headOverride?.sub || "";
   els.xieshengDomain.value = annotation.xieshengDomain || "";
@@ -451,6 +491,7 @@ function renderEditor() {
   els.note.value = annotation.note || "";
   renderPhoneticRows(annotation.phoneticInitials?.length ? annotation.phoneticInitials : [{ primary: "", secondary: [] }]);
   renderWordRows(annotation.words?.length ? annotation.words : [{ meaning: "", example: "" }]);
+  updateImageOverrideState(annotation);
   updateCurrentSaveState();
   state.renderingEditor = false;
 }
@@ -475,10 +516,7 @@ function renderWordRows(rows) {
   }
 }
 
-function captureAnnotation() {
-  if (state.renderingEditor || !state.selectedId) {
-    return;
-  }
+function annotationFromForm(imageOverride = state.annotations[state.selectedId]?.imageOverride || null) {
   const phoneticInitials = [...els.phoneticRows.querySelectorAll(".phonetic-row")]
     .map((row) => ({
       primary: compactSpaces(row.querySelector(".phonetic-primary").value),
@@ -492,7 +530,8 @@ function captureAnnotation() {
     }))
     .filter((item) => item.meaning || item.example);
 
-  const annotation = normalizeAnnotation({
+  return normalizeAnnotation({
+    titleOverride: els.titleOverride.value,
     headOverride: {
       main: els.mainOverride.value,
       sub: els.subOverride.value,
@@ -501,9 +540,12 @@ function captureAnnotation() {
     semanticComponents: els.semanticComponents.value,
     phoneticInitials,
     words,
+    imageOverride,
     note: els.note.value,
   });
+}
 
+function saveCurrentAnnotation(annotation) {
   if (hasAnnotation(annotation)) {
     state.annotations[state.selectedId] = annotation;
   } else {
@@ -512,7 +554,48 @@ function captureAnnotation() {
   persistDrafts();
   renderMeta();
   renderList();
+  refreshSelectedRecordPreview();
+  updateImageOverrideState(annotation);
   updateCurrentSaveState();
+}
+
+function refreshSelectedRecordPreview() {
+  const record = state.recordMap.get(state.selectedId);
+  if (!record) {
+    return;
+  }
+  els.selectedGlyphImage.src = displayImage(record);
+  els.selectedGlyphImage.alt = `${displayMain(record) || ""} ${displaySub(record) || ""} ${displayTitle(record) || ""}`.trim();
+  setRichText(els.selectedTitle, displayTitle(record), "器名未標註");
+}
+
+function captureAnnotation() {
+  if (state.renderingEditor || !state.selectedId) {
+    return;
+  }
+  saveCurrentAnnotation(annotationFromForm());
+}
+
+function updateImageOverrideState(annotation = state.annotations[state.selectedId]) {
+  const imageOverride = annotation?.imageOverride;
+  if (!imageOverride?.dataUrl) {
+    els.imageOverrideState.textContent = "沿用原圖";
+    els.clearImageOverride.disabled = true;
+    return;
+  }
+  const size = imageOverride.size ? ` · 約 ${formatFileSize(imageOverride.size)}` : "";
+  els.imageOverrideState.textContent = `已替換${imageOverride.name ? `：${imageOverride.name}` : ""}${size}`;
+  els.clearImageOverride.disabled = false;
+}
+
+function formatFileSize(size) {
+  if (!size) {
+    return "0 KB";
+  }
+  if (size < 1024 * 1024) {
+    return `${Math.max(1, Math.round(size / 1024))} KB`;
+  }
+  return `${(size / 1024 / 1024).toFixed(1)} MB`;
 }
 
 function updateCurrentSaveState() {
@@ -597,6 +680,86 @@ function downloadExport() {
   link.download = `jinwen-annotations-${stamp}.json`;
   link.click();
   URL.revokeObjectURL(url);
+}
+
+function dataUrlByteSize(dataUrl) {
+  const base64 = String(dataUrl || "").split(",")[1] || "";
+  return Math.round(base64.length * 0.75);
+}
+
+function fileToDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.addEventListener("load", () => resolve(String(reader.result || "")));
+    reader.addEventListener("error", () => reject(reader.error || new Error("圖片讀取失敗")));
+    reader.readAsDataURL(file);
+  });
+}
+
+function loadImage(dataUrl) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.addEventListener("load", () => resolve(image));
+    image.addEventListener("error", () => reject(new Error("圖片載入失敗")));
+    image.src = dataUrl;
+  });
+}
+
+async function imageFileToOverride(file) {
+  if (!file || !file.type.startsWith("image/")) {
+    throw new Error("請選擇圖片文件");
+  }
+  const originalDataUrl = await fileToDataUrl(file);
+  const source = await loadImage(originalDataUrl);
+  const maxSide = 640;
+  const scale = Math.min(1, maxSide / Math.max(source.naturalWidth || source.width, source.naturalHeight || source.height));
+  const width = Math.max(1, Math.round((source.naturalWidth || source.width) * scale));
+  const height = Math.max(1, Math.round((source.naturalHeight || source.height) * scale));
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext("2d");
+  context.clearRect(0, 0, width, height);
+  context.imageSmoothingEnabled = true;
+  context.imageSmoothingQuality = "high";
+  context.drawImage(source, 0, 0, width, height);
+  const dataUrl = canvas.toDataURL("image/webp", 0.92);
+  return {
+    dataUrl,
+    name: file.name || "",
+    type: dataUrl.startsWith("data:image/webp") ? "image/webp" : file.type,
+    size: dataUrlByteSize(dataUrl),
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+async function handleImageOverrideFile(file) {
+  if (!state.selectedId || !file) {
+    return;
+  }
+  try {
+    const imageOverride = await imageFileToOverride(file);
+    saveCurrentAnnotation(annotationFromForm(imageOverride));
+    const record = state.recordMap.get(state.selectedId);
+    els.selectedGlyphImage.src = displayImage(record);
+    els.selectedGlyphImage.alt = `${displayMain(record) || ""} ${displaySub(record) || ""} ${displayTitle(record) || ""}`.trim();
+  } catch (error) {
+    els.saveState.textContent = `圖片處理失敗：${error.message}`;
+  } finally {
+    els.imageOverrideInput.value = "";
+  }
+}
+
+function clearImageOverride() {
+  if (!state.selectedId) {
+    return;
+  }
+  saveCurrentAnnotation(annotationFromForm(null));
+  const record = state.recordMap.get(state.selectedId);
+  if (record) {
+    els.selectedGlyphImage.src = displayImage(record);
+    els.selectedGlyphImage.alt = `${displayMain(record) || ""} ${displaySub(record) || ""} ${displayTitle(record) || ""}`.trim();
+  }
 }
 
 async function importFile(file) {
@@ -726,6 +889,8 @@ function wireEvents() {
   els.addPhonetic.addEventListener("click", addPhoneticRow);
   els.addWord.addEventListener("click", addWordRow);
   els.clearCurrent.addEventListener("click", clearCurrentAnnotation);
+  els.imageOverrideInput.addEventListener("change", () => handleImageOverrideFile(els.imageOverrideInput.files?.[0]));
+  els.clearImageOverride.addEventListener("click", clearImageOverride);
   els.previousRecord.addEventListener("click", () => moveSelection(-1));
   els.nextRecord.addEventListener("click", () => moveSelection(1));
   els.exportButton.addEventListener("click", downloadExport);

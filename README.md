@@ -12,7 +12,7 @@ python -m http.server 4173 --directory site
 
 PUA/未編碼字的篩選頁在 `http://localhost:4173/pua-filter.html`，可查看字頭可定位、僅上下文命中、CID 與未定位等類型。
 
-協作標註頁在 `http://localhost:4173/annotate.html`。協作者可以為每個字圖填寫諧聲域、聲首、義符、詞義/詞例、備註以及字頭校正，資料保存在本機瀏覽器中，完成後可導出 JSON 發回維護者。
+協作標註頁在 `http://localhost:4173/annotate.html`。協作者可以為每個字圖填寫諧聲域、聲首、義符、詞義/詞例、備註、字頭校正、器名校正，也可以上傳重新截取的字圖/銘文圖像。資料保存在本機瀏覽器中，完成後可導出 JSON 發回維護者。
 
 PDF 抽取時無法直接解碼的 CID 字形會以 PDF 文字層裁切小圖顯示，普通檢索不以 `(cid:xxxx)` 佔位符作為器名或來源文本。
 
@@ -27,6 +27,14 @@ PDF 抽取時無法直接解碼的 CID 字形會以 PDF 文字層裁切小圖顯
   "records": {
     "672fdd9dae172941": {
       "headOverride": { "main": "", "sub": "" },
+      "titleOverride": "校正器名",
+      "imageOverride": {
+        "dataUrl": "data:image/webp;base64,...",
+        "name": "crop.webp",
+        "type": "image/webp",
+        "size": 12345,
+        "updatedAt": "2026-05-24T00:00:00.000Z"
+      },
       "xieshengDomain": "A",
       "phoneticInitials": [
         { "primary": "某", "secondary": ["某"] }

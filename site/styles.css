@@ -1008,6 +1008,18 @@ textarea:focus {
   margin-top: 12px;
 }
 
+.image-override-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+  align-items: center;
+}
+
+.ghost-button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
 .annotation-save-state {
   color: var(--muted);
   font-size: 13px;

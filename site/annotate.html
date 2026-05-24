@@ -81,6 +81,10 @@
 
           <form id="annotationForm" class="annotation-form-panel">
             <div class="annotation-form-grid">
+              <label class="full">
+                <span>校正器名</span>
+                <input id="titleOverride" type="text" autocomplete="off" placeholder="留空則沿用原器名" />
+              </label>
               <label>
                 <span>校正主字頭</span>
                 <input id="mainOverride" type="text" autocomplete="off" placeholder="留空則沿用原主字頭" />
@@ -97,6 +101,18 @@
                 <span>義符</span>
                 <input id="semanticComponents" type="text" autocomplete="off" placeholder="多個義符用空格、頓號或逗號分隔" />
               </label>
+
+              <div class="field-group full image-override-group">
+                <span>修正字圖 / 銘文圖像</span>
+                <div class="image-override-controls">
+                  <label class="import-button">
+                    上傳替換圖像
+                    <input id="imageOverrideInput" type="file" accept="image/*" />
+                  </label>
+                  <button id="clearImageOverride" class="ghost-button" type="button">恢復原圖</button>
+                  <span id="imageOverrideState" class="annotation-save-state">沿用原圖</span>
+                </div>
+              </div>
 
               <div class="field-group full">
                 <span>聲首</span>
