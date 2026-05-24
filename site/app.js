@@ -17,6 +17,7 @@ const state = {
   inlineGlyphs: {},
   cidGlyphs: {},
   annotations: {},
+  createdRecords: [],
   meta: null,
   lang: storedLanguage(),
   mode: "head",
@@ -287,6 +288,8 @@ const BOOK_RANK = new Map([
   ["複合族徽", 3],
 ]);
 const CID_RE = /\(cid:\d+\)/gi;
+const EMPTY_GLYPH_IMAGE =
+  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 96 96'%3E%3Crect width='96' height='96' fill='white'/%3E%3Cpath d='M18 18h60v60H18z' fill='none' stroke='%23d8ded7' stroke-width='3'/%3E%3Cpath d='M30 48h36M48 30v36' stroke='%2369726d' stroke-width='4' stroke-linecap='round'/%3E%3C/svg%3E";
 
 const PERIOD_LABELS = {
   en: {
@@ -503,6 +506,20 @@ function matchesObjectQuery(record, terms) {
   return terms.every((term) => text.includes(term));
 }
 
+function normalizeAnnotationBundle(data) {
+  const annotations = normalizeAnnotations(data);
+  const createdRecords = normalizeCreatedRecords(data);
+  for (const record of createdRecords) {
+    const raw = record.rawAnnotation || {};
+    const annotation = normalizeAnnotation(raw);
+    if (hasAnnotation(annotation)) {
+      annotations[record.id] = annotation;
+    }
+    delete record.rawAnnotation;
+  }
+  return { annotations, createdRecords };
+}
+
 function normalizeAnnotations(data) {
   const source = data?.records || data?.annotations || data || {};
   const output = {};
@@ -520,6 +537,8 @@ function normalizeAnnotation(raw = {}) {
   const phoneticSource = raw.phoneticInitials || raw.phonetics || [];
   const wordSource = raw.words || [];
   return {
+    hidden: Boolean(raw.hidden || raw.omit || raw.suppressed),
+    replacedBy: Array.isArray(raw.replacedBy) ? raw.replacedBy.map(compactSpaces).filter(Boolean) : [],
     headOverride: {
       main: compactSpaces(headOverride.main || raw.mainOverride || ""),
       sub: compactSpaces(headOverride.sub || raw.subOverride || ""),
@@ -553,6 +572,8 @@ function hasAnnotation(annotation) {
     annotation &&
       (annotation.headOverride?.main ||
         annotation.headOverride?.sub ||
+        annotation.hidden ||
+        annotation.replacedBy?.length ||
         annotation.titleOverride ||
         annotation.imageOverride?.dataUrl ||
         annotation.xieshengDomain ||
@@ -580,6 +601,46 @@ function normalizeImageOverride(raw) {
   };
 }
 
+function normalizeCreatedRecords(data) {
+  const source = data?.createdRecords || {};
+  const entries = Array.isArray(source) ? source.map((record) => [record.id, record]) : Object.entries(source);
+  const records = [];
+  for (const [fallbackId, raw] of entries) {
+    const record = createdRecordToRecord(raw, fallbackId);
+    if (record) {
+      records.push(record);
+    }
+  }
+  return records;
+}
+
+function createdRecordToRecord(raw = {}, fallbackId = "") {
+  const id = compactSpaces(raw.id || fallbackId);
+  if (!id) {
+    return null;
+  }
+  const context = raw.record || {};
+  const headOverride = raw.headOverride || {};
+  const imageOverride = normalizeImageOverride(raw.imageOverride || raw.glyphImageOverride || raw.imageData || null);
+  return {
+    id,
+    baseRecordId: compactSpaces(raw.baseRecordId || context.baseRecordId || ""),
+    createdKind: compactSpaces(raw.createdKind || raw.kind || "created"),
+    book: compactSpaces(raw.book || context.book || ""),
+    group: compactSpaces(raw.group || context.group || ""),
+    main: compactSpaces(raw.main || context.main || headOverride.main || ""),
+    sub: compactSpaces(raw.sub || context.sub || headOverride.sub || ""),
+    componentHead: compactSpaces(raw.componentHead || context.componentHead || `${headOverride.main || context.main || ""}${headOverride.sub || context.sub || ""}`),
+    title: compactSpaces(raw.title || context.title || raw.titleOverride || ""),
+    period: compactSpaces(raw.period || context.period || ""),
+    source: compactSpaces(raw.source || context.source || ""),
+    pdfPage: raw.pdfPage || context.pdfPage || "",
+    printPage: compactSpaces(raw.printPage || context.printPage || ""),
+    image: compactSpaces(raw.image || context.image || imageOverride?.dataUrl || ""),
+    rawAnnotation: raw,
+  };
+}
+
 function displayMain(record) {
   return record.annotation?.headOverride?.main || record.main;
 }
@@ -593,7 +654,7 @@ function displayTitle(record) {
 }
 
 function displayImage(record) {
-  return record.annotation?.imageOverride?.dataUrl || record.image;
+  return record.annotation?.imageOverride?.dataUrl || record.image || EMPTY_GLYPH_IMAGE;
 }
 
 function phoneticText(annotation) {
@@ -1269,9 +1330,14 @@ async function boot() {
     state.meta = meta;
     state.inlineGlyphs = inlineGlyphs;
     state.cidGlyphs = cidGlyphs;
-    state.annotations = normalizeAnnotations(annotations);
+    const annotationBundle = normalizeAnnotationBundle(annotations);
+    state.annotations = annotationBundle.annotations;
+    state.createdRecords = annotationBundle.createdRecords;
     state.puaIds = filledPuaMap(parseTsv(puaIdsText));
-    state.records = prepareRecords(records);
+    state.records = prepareRecords([
+      ...records.filter((record) => !state.annotations[record.id]?.hidden),
+      ...state.createdRecords,
+    ]);
 
     wireEvents();
     applyLanguage({ rerender: false });

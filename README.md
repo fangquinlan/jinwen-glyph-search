@@ -12,7 +12,7 @@ python -m http.server 4173 --directory site
 
 PUA/未編碼字的篩選頁在 `http://localhost:4173/pua-filter.html`，可查看字頭可定位、僅上下文命中、CID 與未定位等類型。
 
-協作標註頁在 `http://localhost:4173/annotate.html`。協作者可以為每個字圖填寫諧聲域、聲首、義符、詞義/詞例、備註、字頭校正、器名校正，也可以上傳重新截取的字圖/銘文圖像。資料保存在本機瀏覽器中，完成後可導出 JSON 發回維護者。
+協作標註頁在 `http://localhost:4173/annotate.html`。協作者可以為每個字圖填寫諧聲域、聲首、義符、詞義/詞例、備註、字頭校正、器名校正，也可以上傳重新截取的字圖/銘文圖像。頁面還支持新增空白字圖、複製既有字圖，以及把合文字圖拆分為兩條派生字圖；拆分後原字圖會標記為不再顯示。資料保存在本機瀏覽器中，完成後可導出 JSON 發回維護者。
 
 PDF 抽取時無法直接解碼的 CID 字形會以 PDF 文字層裁切小圖顯示，普通檢索不以 `(cid:xxxx)` 佔位符作為器名或來源文本。
 
@@ -27,6 +27,8 @@ PDF 抽取時無法直接解碼的 CID 字形會以 PDF 文字層裁切小圖顯
   "records": {
     "672fdd9dae172941": {
       "headOverride": { "main": "", "sub": "" },
+      "hidden": false,
+      "replacedBy": [],
       "titleOverride": "校正器名",
       "imageOverride": {
         "dataUrl": "data:image/webp;base64,...",
@@ -44,6 +46,30 @@ PDF 抽取時無法直接解碼的 CID 字形會以 PDF 文字層裁切小圖顯
         { "meaning": "詞義", "example": "器物中的詞例" }
       ],
       "note": "出處或說明"
+    }
+  },
+  "createdRecords": {
+    "split-lx000000-abcd12": {
+      "id": "split-lx000000-abcd12",
+      "baseRecordId": "672fdd9dae172941",
+      "createdKind": "split",
+      "record": {
+        "main": "原主字頭",
+        "sub": "原子字頭",
+        "title": "原器名",
+        "source": "原來源",
+        "period": "原時期",
+        "book": "原分編",
+        "group": "原組號",
+        "pdfPage": 1,
+        "printPage": "10",
+        "image": "assets/glyphs/..."
+      },
+      "headOverride": { "main": "拆出字一", "sub": "" },
+      "titleOverride": "校正器名",
+      "imageOverride": {
+        "dataUrl": "data:image/webp;base64,..."
+      }
     }
   }
 }

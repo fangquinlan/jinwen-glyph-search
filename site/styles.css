@@ -880,6 +880,11 @@ select:focus {
   color: var(--green);
 }
 
+.annotation-status-pill.created {
+  background: #f2e7df;
+  color: var(--accent-strong);
+}
+
 .annotation-editor {
   display: grid;
   gap: 14px;
@@ -1018,6 +1023,10 @@ textarea:focus {
 .ghost-button:disabled {
   opacity: 0.5;
   cursor: default;
+}
+
+.danger-button {
+  color: var(--accent-strong);
 }
 
 .annotation-save-state {

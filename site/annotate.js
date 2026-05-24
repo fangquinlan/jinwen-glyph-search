@@ -33,10 +33,14 @@ const BOOK_RANK = new Map([
 const CID_RE = /\(cid:\d+\)/gi;
 
 const state = {
+  baseRecords: [],
+  baseRecordMap: new Map(),
   records: [],
   recordMap: new Map(),
   baseAnnotations: {},
   annotations: {},
+  baseCreatedRecords: {},
+  createdRecords: {},
   inlineGlyphs: {},
   cidGlyphs: {},
   meta: null,
@@ -50,6 +54,9 @@ const state = {
   renderingEditor: false,
 };
 
+const EMPTY_GLYPH_IMAGE =
+  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 96 96'%3E%3Crect width='96' height='96' fill='white'/%3E%3Cpath d='M18 18h60v60H18z' fill='none' stroke='%23d8ded7' stroke-width='3'/%3E%3Cpath d='M30 48h36M48 30v36' stroke='%2369726d' stroke-width='4' stroke-linecap='round'/%3E%3C/svg%3E";
+
 const els = {
   meta: document.querySelector("#annotationMeta"),
   search: document.querySelector("#annotationSearch"),
@@ -59,6 +66,10 @@ const els = {
   importInput: document.querySelector("#annotationImport"),
   exportButton: document.querySelector("#annotationExport"),
   clearButton: document.querySelector("#annotationClear"),
+  createBlank: document.querySelector("#createBlankRecord"),
+  copyCurrent: document.querySelector("#copyCurrentRecord"),
+  splitCurrent: document.querySelector("#splitCurrentRecord"),
+  deleteCreated: document.querySelector("#deleteCreatedRecord"),
   count: document.querySelector("#annotationCount"),
   saveState: document.querySelector("#annotationSaveState"),
   list: document.querySelector("#annotationList"),
@@ -171,6 +182,18 @@ function setOptions(select, values, allLabel) {
   }
 }
 
+function normalizeAnnotationBundle(data) {
+  const annotations = normalizeAnnotations(data);
+  const createdRecords = normalizeCreatedRecords(data);
+  for (const [id, raw] of Object.entries(createdRecords)) {
+    const annotation = normalizeAnnotation(raw);
+    if (hasAnnotation(annotation)) {
+      annotations[id] = annotation;
+    }
+  }
+  return { annotations, createdRecords };
+}
+
 function normalizeAnnotations(data) {
   const source = data?.records || data?.annotations || data || {};
   const output = {};
@@ -188,6 +211,8 @@ function normalizeAnnotation(raw = {}) {
   const phoneticSource = raw.phoneticInitials || raw.phonetics || [];
   const wordSource = raw.words || [];
   return {
+    hidden: Boolean(raw.hidden || raw.omit || raw.suppressed),
+    replacedBy: Array.isArray(raw.replacedBy) ? raw.replacedBy.map(compactSpaces).filter(Boolean) : [],
     headOverride: {
       main: compactSpaces(headOverride.main || raw.mainOverride || ""),
       sub: compactSpaces(headOverride.sub || raw.subOverride || ""),
@@ -221,6 +246,8 @@ function hasAnnotation(annotation) {
     annotation &&
       (annotation.headOverride?.main ||
         annotation.headOverride?.sub ||
+        annotation.hidden ||
+        annotation.replacedBy?.length ||
         annotation.titleOverride ||
         annotation.imageOverride?.dataUrl ||
         annotation.xieshengDomain ||
@@ -248,6 +275,85 @@ function normalizeImageOverride(raw) {
   };
 }
 
+function normalizeCreatedRecords(data) {
+  const source = data?.createdRecords || {};
+  const entries = Array.isArray(source) ? source.map((record) => [record.id, record]) : Object.entries(source);
+  const output = {};
+  for (const [fallbackId, raw] of entries) {
+    const record = normalizeCreatedRecord(raw, fallbackId);
+    if (record) {
+      output[record.id] = record;
+    }
+  }
+  return output;
+}
+
+function normalizeCreatedRecord(raw = {}, fallbackId = "") {
+  const id = compactSpaces(raw.id || fallbackId);
+  if (!id) {
+    return null;
+  }
+  const record = raw.record || {};
+  const headOverride = raw.headOverride || {};
+  const imageOverride = normalizeImageOverride(raw.imageOverride || raw.glyphImageOverride || raw.imageData || null);
+  return {
+    id,
+    baseRecordId: compactSpaces(raw.baseRecordId || record.baseRecordId || ""),
+    createdKind: compactSpaces(raw.createdKind || raw.kind || "created"),
+    record: {
+      main: compactSpaces(raw.main || record.main || headOverride.main || ""),
+      sub: compactSpaces(raw.sub || record.sub || headOverride.sub || ""),
+      title: compactSpaces(raw.title || record.title || raw.titleOverride || ""),
+      source: compactSpaces(raw.source || record.source || ""),
+      period: compactSpaces(raw.period || record.period || ""),
+      book: compactSpaces(raw.book || record.book || ""),
+      group: compactSpaces(raw.group || record.group || ""),
+      pdfPage: raw.pdfPage || record.pdfPage || "",
+      printPage: compactSpaces(raw.printPage || record.printPage || ""),
+      image: compactSpaces(raw.image || record.image || imageOverride?.dataUrl || ""),
+    },
+    titleOverride: compactSpaces(raw.titleOverride || raw.objectOverride || raw.vesselOverride || ""),
+    imageOverride,
+    headOverride: {
+      main: compactSpaces(headOverride.main || raw.mainOverride || ""),
+      sub: compactSpaces(headOverride.sub || raw.subOverride || ""),
+    },
+    xieshengDomain: compactSpaces(raw.xieshengDomain || raw.domain || "").toUpperCase(),
+    phoneticInitials: Array.isArray(raw.phoneticInitials || raw.phonetics) ? raw.phoneticInitials || raw.phonetics : [],
+    semanticComponents: splitTags(raw.semanticComponents || raw.semantic || []),
+    words: Array.isArray(raw.words) ? raw.words : [],
+    note: compactSpaces(raw.note || raw.remark || ""),
+  };
+}
+
+function createdRecordToRecord(created) {
+  const record = created.record || {};
+  return {
+    id: created.id,
+    baseRecordId: created.baseRecordId,
+    createdKind: created.createdKind || "created",
+    isCreated: true,
+    book: record.book || "",
+    group: record.group || "",
+    main: record.main || "",
+    sub: record.sub || "",
+    componentHead: `${record.main || ""}${record.sub || ""}`,
+    title: record.title || "",
+    period: record.period || "",
+    source: record.source || "",
+    pdfPage: record.pdfPage || "",
+    printPage: record.printPage || "",
+    image: record.image || "",
+  };
+}
+
+function rebuildRecords() {
+  const visibleBase = state.baseRecords.filter((record) => !state.annotations[record.id]?.hidden);
+  const created = Object.values(state.createdRecords).map(createdRecordToRecord);
+  state.records = [...visibleBase, ...created].sort(compareRecords);
+  state.recordMap = new Map(state.records.map((record) => [record.id, record]));
+}
+
 function displayMain(record) {
   return state.annotations[record.id]?.headOverride?.main || record.main;
 }
@@ -261,7 +367,7 @@ function displayTitle(record) {
 }
 
 function displayImage(record) {
-  return state.annotations[record.id]?.imageOverride?.dataUrl || record.image;
+  return state.annotations[record.id]?.imageOverride?.dataUrl || record.image || EMPTY_GLYPH_IMAGE;
 }
 
 function annotationText(annotation) {
@@ -301,6 +407,7 @@ function recordSearchText(record) {
 }
 
 function applyFilters() {
+  rebuildRecords();
   const terms = normalize(state.query).split(/\s+/).filter(Boolean);
   state.filtered = state.records.filter((record) => {
     if (state.book && record.book !== state.book) {
@@ -404,7 +511,8 @@ function codepoints(value) {
 
 function renderMeta() {
   const filled = Object.values(state.annotations).filter(hasAnnotation).length;
-  els.meta.textContent = `${formatNumber(state.records.length)} 筆字形記錄 · ${formatNumber(filled)} 筆本機/已載入標註`;
+  const created = Object.keys(state.createdRecords).length;
+  els.meta.textContent = `${formatNumber(state.records.length)} 筆字形記錄 · ${formatNumber(filled)} 筆本機/已載入標註 · ${formatNumber(created)} 筆新增字圖`;
   els.count.textContent = `${formatNumber(state.filtered.length)} 筆字圖 · 已顯示 ${formatNumber(
     Math.min(state.visible, state.filtered.length)
   )} 筆`;
@@ -436,7 +544,8 @@ function renderListItem(record) {
   const pill = node.querySelector(".annotation-status-pill");
   const filled = hasAnnotation(state.annotations[record.id]);
   pill.classList.toggle("filled", filled);
-  pill.textContent = filled ? "已標註" : "未標註";
+  pill.classList.toggle("created", Boolean(record.isCreated));
+  pill.textContent = record.isCreated ? "新增字圖" : filled ? "已標註" : "未標註";
   node.addEventListener("click", () => selectRecord(record.id));
   return node;
 }
@@ -454,6 +563,9 @@ function renderEditor() {
   const record = state.recordMap.get(state.selectedId);
   els.empty.hidden = Boolean(record);
   els.editor.hidden = !record;
+  els.copyCurrent.disabled = !record;
+  els.splitCurrent.disabled = !record;
+  els.deleteCreated.disabled = !record?.isCreated;
   if (!record) {
     els.currentSaveState.textContent = "尚未選擇";
     return;
@@ -469,6 +581,9 @@ function renderEditor() {
   appendRichText(els.selectedHeads, record.main || "未標註");
   els.selectedHeads.append(document.createTextNode(" · 子字頭："));
   appendRichText(els.selectedHeads, record.sub || "未標註");
+  if (record.isCreated) {
+    els.selectedHeads.append(document.createTextNode(" · 新增字圖"));
+  }
   if (annotation.titleOverride) {
     els.selectedHeads.append(document.createTextNode(" · 原器名："));
     appendRichText(els.selectedHeads, record.title || "未標註");
@@ -613,7 +728,8 @@ function persistDrafts() {
   const payload = exportPayload();
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
-    els.saveState.textContent = `已保存 ${formatNumber(Object.keys(payload.records).length)} 筆本機草稿；分享前請導出 JSON。`;
+    const total = Object.keys(payload.records).length + Object.keys(payload.createdRecords).length;
+    els.saveState.textContent = `已保存 ${formatNumber(total)} 筆本機草稿；分享前請導出 JSON。`;
   } catch (error) {
     els.saveState.textContent = `本機保存失敗：${error.message}。請立即導出 JSON。`;
   }
@@ -622,9 +738,9 @@ function persistDrafts() {
 function loadDrafts() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? normalizeAnnotations(JSON.parse(raw)) : {};
+    return raw ? normalizeAnnotationBundle(JSON.parse(raw)) : { annotations: {}, createdRecords: {} };
   } catch {
-    return {};
+    return { annotations: {}, createdRecords: {} };
   }
 }
 
@@ -643,22 +759,46 @@ function recordContext(record) {
   };
 }
 
+function exportRecordForId(id) {
+  return state.recordMap.get(id) || state.baseRecordMap.get(id) || createdRecordToRecord(state.createdRecords[id] || {});
+}
+
 function exportPayload() {
   const records = {};
+  const createdRecords = {};
+  const createdIds = new Set(Object.keys(state.createdRecords));
   for (const [id, annotation] of Object.entries(state.annotations)) {
+    if (createdIds.has(id)) {
+      continue;
+    }
     if (!hasAnnotation(annotation)) {
       continue;
     }
     records[id] = {
       ...annotation,
-      record: recordContext(state.recordMap.get(id) || {}),
+      record: recordContext(exportRecordForId(id) || {}),
+    };
+  }
+  for (const [id, created] of Object.entries(state.createdRecords)) {
+    const annotation = state.annotations[id] || normalizeAnnotation(created);
+    createdRecords[id] = {
+      id,
+      baseRecordId: created.baseRecordId || "",
+      createdKind: created.createdKind || "created",
+      ...annotation,
+      record: {
+        ...(created.record || {}),
+        ...recordContext(exportRecordForId(id) || {}),
+      },
     };
   }
   return {
     schema: EXPORT_SCHEMA,
     updatedAt: new Date().toISOString(),
     recordCount: Object.keys(records).length,
+    createdRecordCount: Object.keys(createdRecords).length,
     records,
+    createdRecords,
   };
 }
 
@@ -767,18 +907,23 @@ async function importFile(file) {
     return;
   }
   try {
-    const imported = normalizeAnnotations(JSON.parse(await file.text()));
+    const imported = normalizeAnnotationBundle(JSON.parse(await file.text()));
     state.annotations = {
       ...state.annotations,
-      ...imported,
+      ...imported.annotations,
+    };
+    state.createdRecords = {
+      ...state.createdRecords,
+      ...imported.createdRecords,
     };
     persistDrafts();
     applyFilters();
-    const first = Object.keys(imported)[0];
+    const first = Object.keys(imported.createdRecords)[0] || Object.keys(imported.annotations)[0];
     if (first) {
       selectRecord(first);
     }
-    els.saveState.textContent = `已匯入 ${formatNumber(Object.keys(imported).length)} 筆標註，並保存到本機草稿。`;
+    const importedCount = Object.keys(imported.annotations).length + Object.keys(imported.createdRecords).length;
+    els.saveState.textContent = `已匯入 ${formatNumber(importedCount)} 筆標註/新增字圖，並保存到本機草稿。`;
   } catch (error) {
     els.saveState.textContent = `匯入失敗：${error.message}`;
   } finally {
@@ -796,6 +941,7 @@ function clearLocalDrafts() {
     // Ignore storage failures; the in-memory reset still works.
   }
   state.annotations = { ...state.baseAnnotations };
+  state.createdRecords = { ...state.baseCreatedRecords };
   applyFilters();
   renderEditor();
   els.saveState.textContent = "本機草稿已清空，仍保留網站內建標註資料。";
@@ -810,6 +956,101 @@ function clearCurrentAnnotation() {
   renderEditor();
   renderList();
   renderMeta();
+}
+
+function derivedId(prefix = "created") {
+  const stamp = Date.now().toString(36);
+  const random = Math.random().toString(36).slice(2, 8);
+  return `${prefix}-${stamp}-${random}`;
+}
+
+function currentRecordSnapshot(record) {
+  return {
+    main: displayMain(record) || record.main || "",
+    sub: displaySub(record) || record.sub || "",
+    title: displayTitle(record) || record.title || "",
+    source: record.source || "",
+    period: record.period || "",
+    book: record.book || "",
+    group: record.group || "",
+    pdfPage: record.pdfPage || "",
+    printPage: record.printPage || "",
+    image: displayImage(record),
+  };
+}
+
+function createRecordFrom(record, kind = "copy") {
+  const id = derivedId(kind);
+  const baseRecordId = record?.baseRecordId || record?.id || "";
+  state.createdRecords[id] = normalizeCreatedRecord({
+    id,
+    baseRecordId,
+    createdKind: kind,
+    record: record ? currentRecordSnapshot(record) : {},
+  });
+  state.annotations[id] = normalizeAnnotation({});
+  return id;
+}
+
+function createBlankRecord() {
+  const id = createRecordFrom(null, "new");
+  persistDrafts();
+  applyFilters();
+  selectRecord(id);
+}
+
+function copyCurrentRecord() {
+  const record = state.recordMap.get(state.selectedId);
+  if (!record) {
+    return;
+  }
+  const id = createRecordFrom(record, "copy");
+  const annotation = state.annotations[record.id];
+  if (annotation && !annotation.hidden) {
+    state.annotations[id] = normalizeAnnotation({
+      ...annotation,
+      hidden: false,
+      replacedBy: [],
+    });
+  }
+  persistDrafts();
+  applyFilters();
+  selectRecord(id);
+}
+
+function splitCurrentRecord() {
+  const record = state.recordMap.get(state.selectedId);
+  if (!record) {
+    return;
+  }
+  const firstId = createRecordFrom(record, "split");
+  const secondId = createRecordFrom(record, "split");
+  if (record.isCreated) {
+    delete state.createdRecords[record.id];
+    delete state.annotations[record.id];
+  } else {
+    const currentAnnotation = annotationFromForm();
+    state.annotations[record.id] = normalizeAnnotation({
+      ...currentAnnotation,
+      hidden: true,
+      replacedBy: [firstId, secondId],
+    });
+  }
+  persistDrafts();
+  applyFilters();
+  selectRecord(firstId);
+}
+
+function deleteCreatedRecord() {
+  const record = state.recordMap.get(state.selectedId);
+  if (!record?.isCreated) {
+    return;
+  }
+  delete state.createdRecords[record.id];
+  delete state.annotations[record.id];
+  persistDrafts();
+  applyFilters();
+  selectRecord(state.filtered[0]?.id || "", { updateHash: false });
 }
 
 function moveSelection(delta) {
@@ -888,6 +1129,10 @@ function wireEvents() {
   });
   els.addPhonetic.addEventListener("click", addPhoneticRow);
   els.addWord.addEventListener("click", addWordRow);
+  els.createBlank.addEventListener("click", createBlankRecord);
+  els.copyCurrent.addEventListener("click", copyCurrentRecord);
+  els.splitCurrent.addEventListener("click", splitCurrentRecord);
+  els.deleteCreated.addEventListener("click", deleteCreatedRecord);
   els.clearCurrent.addEventListener("click", clearCurrentAnnotation);
   els.imageOverrideInput.addEventListener("change", () => handleImageOverrideFile(els.imageOverrideInput.files?.[0]));
   els.clearImageOverride.addEventListener("click", clearImageOverride);
@@ -913,15 +1158,22 @@ async function boot() {
       loadOptionalJson("./data/cid_glyphs.json"),
       loadOptionalJson("./data/annotations.json"),
     ]);
-    state.records = records.slice().sort(compareRecords);
-    state.recordMap = new Map(state.records.map((record) => [record.id, record]));
+    state.baseRecords = records.slice().sort(compareRecords);
+    state.baseRecordMap = new Map(state.baseRecords.map((record) => [record.id, record]));
     state.meta = meta;
     state.inlineGlyphs = inlineGlyphs;
     state.cidGlyphs = cidGlyphs;
-    state.baseAnnotations = normalizeAnnotations(annotations);
+    const baseBundle = normalizeAnnotationBundle(annotations);
+    const draftBundle = loadDrafts();
+    state.baseAnnotations = baseBundle.annotations;
+    state.baseCreatedRecords = baseBundle.createdRecords;
     state.annotations = {
       ...state.baseAnnotations,
-      ...loadDrafts(),
+      ...draftBundle.annotations,
+    };
+    state.createdRecords = {
+      ...state.baseCreatedRecords,
+      ...draftBundle.createdRecords,
     };
 
     setOptions(els.bookFilter, meta.books || [], "全部分編");
