@@ -78,8 +78,8 @@ const I18N = {
     allPeriods: "全部時期",
     clear: "清空",
     resultCount: "{count} 筆結果",
-    puaStatus: "PUA/未編碼：{manual} 個 · 已填 IDS：{ids} 個 · 內嵌字型：{fonts} 個 · 圖片字：{inline} 個",
-    puaList: "PUA 清單",
+    puaStatus: "PUA/未編碼：{manual} 個 · 內嵌字型：{fonts} 個 · 圖片字：{inline} 個",
+    puaList: "PUA 篩選",
     viewAria: "結果視圖",
     detail: "詳細",
     compact: "緊湊",
@@ -122,8 +122,8 @@ const I18N = {
     allPeriods: "All periods",
     clear: "Clear",
     resultCount: "{count} results",
-    puaStatus: "PUA/unencoded: {manual} · IDS filled: {ids} · embedded fonts: {fonts} · image glyphs: {inline}",
-    puaList: "PUA list",
+    puaStatus: "PUA/unencoded: {manual} · embedded fonts: {fonts} · image glyphs: {inline}",
+    puaList: "PUA filter",
     viewAria: "Result view",
     detail: "Detail",
     compact: "Compact",
@@ -166,8 +166,8 @@ const I18N = {
     allPeriods: "すべての時期",
     clear: "クリア",
     resultCount: "{count} 件",
-    puaStatus: "PUA/未符号化：{manual} 個 · IDS 入力済み：{ids} 個 · 埋込フォント：{fonts} 個 · 画像字：{inline} 個",
-    puaList: "PUA 一覧",
+    puaStatus: "PUA/未符号化：{manual} 個 · 埋込フォント：{fonts} 個 · 画像字：{inline} 個",
+    puaList: "PUA フィルタ",
     viewAria: "結果表示",
     detail: "詳細",
     compact: "コンパクト",
@@ -691,12 +691,11 @@ function refreshOptions() {
 
 function updatePuaStatus() {
   if (!state.meta) {
-    els.puaStatus.textContent = t("puaStatus", { manual: "0", ids: "0", fonts: "0", inline: "0" });
+    els.puaStatus.textContent = t("puaStatus", { manual: "0", fonts: "0", inline: "0" });
     return;
   }
   els.puaStatus.textContent = t("puaStatus", {
     manual: formatNumber(state.meta.manualTokenCount),
-    ids: formatNumber(Object.keys(state.puaIds).length),
     fonts: formatNumber(state.meta.fontCount || 0),
     inline: formatNumber(state.meta.inlineGlyphCount || Object.keys(state.inlineGlyphs).length),
   });

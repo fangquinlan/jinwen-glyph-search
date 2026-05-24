@@ -3,83 +3,60 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>金文字形檢索</title>
+    <title>PUA/未編碼字頭篩選</title>
     <link rel="icon" href="data:," />
     <link rel="stylesheet" href="./assets/fonts/fonts.css" />
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
-    <main class="app-shell">
-      <header class="topbar">
+    <main class="app-shell review-shell">
+      <header class="topbar review-topbar">
         <div>
-          <h1>金文字形檢索</h1>
-          <p id="datasetMeta" class="dataset-meta">正在載入資料...</p>
+          <p class="kicker">PUA 篩選</p>
+          <h1>PUA/未編碼字頭篩選</h1>
+          <p id="reviewMeta" class="dataset-meta">正在載入資料...</p>
         </div>
         <div class="top-actions">
           <button class="info-button" type="button" data-legal-open aria-label="資料來源與權利聲明">!</button>
-          <a id="puaLink" class="meta-link" href="./pua-filter.html">PUA 篩選</a>
-          <div class="lang-control" role="group" aria-label="介面語言">
-            <button class="lang-button active" type="button" data-lang="zh-Hant">繁</button>
-            <button class="lang-button" type="button" data-lang="en">EN</button>
-            <button class="lang-button" type="button" data-lang="ja">日</button>
-          </div>
+          <a class="meta-link" href="./index.html">返回檢索</a>
+          <a class="meta-link" href="./data/pua_chars.tsv">原始清單</a>
         </div>
       </header>
 
-      <section class="search-panel" aria-label="檢索條件">
-        <div class="search-row">
-          <label class="search-box">
-            <span>字頭檢索</span>
-            <input id="headInput" type="search" autocomplete="off" placeholder="主字頭、子字頭，或部件/IDS" />
-          </label>
-          <label class="search-box">
-            <span>器名 / 來源</span>
-            <input id="objectInput" type="search" autocomplete="off" placeholder="器名、集成號、銘圖號" />
-          </label>
-          <div class="control-stack">
-            <span id="modeLabel">檢索方式</span>
-            <div class="mode-control" role="group" aria-label="檢索方式">
-              <button class="mode-button active" type="button" data-mode="head">字頭</button>
-              <button class="mode-button" type="button" data-mode="component">部件/IDS</button>
-            </div>
-          </div>
-          <div id="scopeStack" class="control-stack">
-            <span id="scopeLabel">字頭範圍</span>
-            <div class="scope-control" role="group" aria-label="字頭範圍">
-              <button class="scope-button active" type="button" data-scope="all">主+子</button>
-              <button class="scope-button" type="button" data-scope="main">主字頭</button>
-              <button class="scope-button" type="button" data-scope="sub">子字頭</button>
-            </div>
-          </div>
-        </div>
-
-        <div class="filter-row">
-          <label>
-            <span>分編</span>
-            <select id="bookFilter"></select>
-          </label>
-          <label>
-            <span>時期</span>
-            <select id="periodFilter"></select>
-          </label>
-          <button id="clearButton" class="clear-button" type="button">清空</button>
-        </div>
+      <section class="review-toolbar pua-filter-toolbar" aria-label="PUA 篩選工具">
+        <label class="search-box">
+          <span>篩選</span>
+          <input id="reviewSearch" type="search" autocomplete="off" placeholder="字形、碼位、字頭、器名、來源" />
+        </label>
+        <label>
+          <span>類型</span>
+          <select id="kindFilter">
+            <option value="all">全部類型</option>
+            <option value="head">字頭可定位</option>
+            <option value="context">僅上下文命中</option>
+            <option value="cid">CID</option>
+            <option value="unlocated">未定位</option>
+          </select>
+        </label>
+        <label>
+          <span>排序</span>
+          <select id="sortMode">
+            <option value="head">字頭例數</option>
+            <option value="count">清單次數</option>
+            <option value="codepoint">碼位</option>
+            <option value="kind">類型</option>
+          </select>
+        </label>
       </section>
 
-      <section class="status-row" aria-live="polite">
-        <div id="resultCount">0 筆結果</div>
-        <div class="status-tools">
-          <div id="puaStatus">PUA/未編碼：0 個</div>
-          <div class="view-control" role="group" aria-label="結果視圖">
-            <button class="view-button active" type="button" data-view="detail">詳細</button>
-            <button class="view-button" type="button" data-view="compact">緊湊</button>
-          </div>
-        </div>
+      <section class="status-row review-status" aria-live="polite">
+        <div id="reviewCount">0 個未編碼項</div>
+        <div id="saveStatus">僅供篩選與定位，不再收集 IDS</div>
       </section>
 
-      <section id="results" class="results" aria-label="檢索結果"></section>
+      <section id="reviewList" class="review-list" aria-label="PUA 篩選列表"></section>
       <div class="load-more-wrap">
-        <button id="loadMoreButton" class="load-more" type="button" hidden>載入更多</button>
+        <button id="reviewLoadMore" class="load-more" type="button" hidden>載入更多</button>
       </div>
     </main>
 
@@ -112,25 +89,24 @@
       </form>
     </dialog>
 
-    <template id="resultTemplate">
-      <article class="result-card">
-        <div class="glyph-frame">
-          <img class="glyph-image" loading="lazy" alt="" />
+    <template id="reviewTemplate">
+      <article class="review-card pua-card">
+        <div class="review-image-frame">
+          <img class="review-image" loading="lazy" alt="" />
         </div>
-        <div class="result-body">
-          <div class="head-line">
-            <span class="head-token main-token"></span>
-            <span class="head-token sub-token"></span>
-            <span class="period-pill"></span>
+        <div class="review-body">
+          <div class="review-token-row">
+            <div class="review-token"></div>
+            <div class="review-codepoint"></div>
+            <div class="pua-kind-pill"></div>
           </div>
-          <h2 class="record-title"></h2>
-          <p class="source-line"></p>
-          <p class="page-line"></p>
+          <div class="review-context"></div>
+          <div class="review-example-tools"></div>
         </div>
       </article>
     </template>
 
     <script src="./legal.js" type="module"></script>
-    <script src="./app.js" type="module"></script>
+    <script src="./pua-filter.js" type="module"></script>
   </body>
 </html>

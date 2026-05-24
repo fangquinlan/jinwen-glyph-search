@@ -87,8 +87,33 @@ h1 {
   flex-wrap: wrap;
 }
 
+.info-button {
+  flex: 0 0 auto;
+  width: 40px;
+  height: 40px;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--accent-strong);
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 8px 24px rgba(28, 37, 34, 0.04);
+}
+
+.info-button:hover {
+  border-color: #c7b5a9;
+}
+
 .meta-link:hover {
   border-color: #c7b5a9;
+}
+
+.kicker {
+  margin: 0 0 6px;
+  color: var(--accent-strong);
+  font-size: 13px;
 }
 
 .search-panel {
@@ -234,6 +259,32 @@ select:focus {
   background: var(--ink);
   color: white;
   border: 1px solid var(--ink);
+}
+
+.ghost-button,
+.import-button {
+  min-height: 38px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  padding: 0 13px;
+  display: inline-grid;
+  place-items: center;
+  cursor: pointer;
+}
+
+.import-button input {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.ghost-button:hover,
+.import-button:hover {
+  border-color: #c7b5a9;
 }
 
 .clear-button:hover,
@@ -483,5 +534,286 @@ select:focus {
 
   .record-title {
     font-size: 17px;
+  }
+}
+
+.review-shell {
+  width: min(1360px, calc(100% - 32px));
+}
+
+.review-toolbar {
+  display: grid;
+  grid-template-columns: minmax(240px, 1fr) minmax(150px, 190px) minmax(150px, 190px) auto;
+  gap: 14px;
+  align-items: end;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 18px;
+  box-shadow: var(--shadow);
+}
+
+.pua-filter-toolbar {
+  grid-template-columns: minmax(240px, 1fr) minmax(160px, 210px) minmax(160px, 210px);
+}
+
+.review-toolbar label {
+  display: grid;
+  gap: 7px;
+}
+
+.review-toolbar span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.review-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.review-status {
+  align-items: flex-start;
+}
+
+.review-list {
+  display: grid;
+  gap: 12px;
+}
+
+.review-card {
+  display: grid;
+  grid-template-columns: 156px minmax(0, 1fr) minmax(260px, 360px);
+  gap: 18px;
+  align-items: stretch;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 14px;
+}
+
+.pua-card {
+  grid-template-columns: 156px minmax(0, 1fr);
+}
+
+.review-image-frame {
+  min-height: 156px;
+  display: grid;
+  place-items: center;
+  border: 1px solid #e1e5df;
+  background: #fff;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.review-image {
+  width: calc(100% - 14px);
+  height: calc(100% - 14px);
+  max-height: 148px;
+  object-fit: contain;
+  display: block;
+}
+
+.review-body {
+  min-width: 0;
+  display: grid;
+  align-content: start;
+  gap: 10px;
+}
+
+.review-token-row {
+  display: flex;
+  gap: 12px;
+  align-items: baseline;
+  flex-wrap: wrap;
+}
+
+.review-token {
+  color: var(--ink);
+  font-size: 42px;
+  line-height: 1;
+}
+
+.review-codepoint,
+.review-record-meta,
+.review-example-tools {
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.pua-kind-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  border-radius: 6px;
+  background: #f1f2f0;
+  color: #4d5752;
+  padding: 3px 8px;
+  font-size: 14px;
+  line-height: 1.2;
+}
+
+.pua-kind-pill[data-kind="head"] {
+  background: #e7efe9;
+  color: var(--green);
+}
+
+.pua-kind-pill[data-kind="context"] {
+  background: #f2e7df;
+  color: var(--accent-strong);
+}
+
+.pua-kind-pill[data-kind="cid"],
+.pua-kind-pill[data-kind="unlocated"] {
+  background: #edf0ef;
+  color: var(--muted);
+}
+
+.review-context {
+  display: grid;
+  gap: 6px;
+}
+
+.review-liding-line {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr);
+  gap: 10px;
+  align-items: baseline;
+}
+
+.review-liding-label {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.review-liding-value {
+  min-width: 0;
+  font-size: 22px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.pua-hit {
+  color: var(--accent-strong);
+  background: #f5e7df;
+  border-radius: 4px;
+  padding: 0 0.08em;
+}
+
+.review-example-tools {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.tiny-button {
+  min-height: 28px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface-soft);
+  color: var(--ink);
+  padding: 0 9px;
+  cursor: pointer;
+}
+
+.rights-dialog {
+  width: min(900px, calc(100% - 32px));
+  max-height: min(760px, calc(100% - 32px));
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 24px 80px rgba(28, 37, 34, 0.22);
+}
+
+.rights-dialog::backdrop {
+  background: rgba(22, 29, 26, 0.38);
+}
+
+.rights-panel {
+  display: grid;
+  max-height: inherit;
+}
+
+.rights-heading {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.rights-heading h2 {
+  margin: 0;
+  font-size: 22px;
+  line-height: 1.2;
+}
+
+.dialog-close {
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--surface-soft);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.rights-content {
+  display: grid;
+  gap: 18px;
+  overflow: auto;
+  padding: 18px 20px 22px;
+}
+
+.rights-content section {
+  display: grid;
+  gap: 8px;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 16px;
+}
+
+.rights-content section:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.rights-content h3,
+.rights-content p {
+  margin: 0;
+}
+
+.rights-content h3 {
+  font-size: 16px;
+  color: var(--accent-strong);
+}
+
+.rights-content p {
+  color: #3f4944;
+  font-size: 15px;
+  line-height: 1.7;
+}
+
+@media (max-width: 980px) {
+  .review-toolbar,
+  .review-card {
+    grid-template-columns: 1fr;
+  }
+
+  .review-actions {
+    justify-content: flex-start;
+  }
+
+  .review-image-frame {
+    min-height: 132px;
   }
 }
