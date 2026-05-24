@@ -17,6 +17,7 @@
         </div>
         <div class="top-actions">
           <button class="info-button" type="button" data-legal-open aria-label="資料來源與權利聲明">!</button>
+          <a id="annotateLink" class="meta-link" href="./annotate.html">協作標註</a>
           <a id="puaLink" class="meta-link" href="./pua-filter.html">PUA 篩選</a>
           <div class="lang-control" role="group" aria-label="介面語言">
             <button class="lang-button active" type="button" data-lang="zh-Hant">繁</button>
@@ -52,6 +53,26 @@
             </div>
           </div>
         </div>
+
+        <div class="annotation-row" aria-label="擴展標註檢索">
+          <label>
+            <span id="domainLabel">諧聲域</span>
+            <input id="domainInput" type="search" autocomplete="off" placeholder="支援正則，如 ^A$ 或 [AB]" />
+          </label>
+          <label>
+            <span id="phoneticLabel">聲首</span>
+            <input id="phoneticInput" type="search" autocomplete="off" placeholder="一級或二級聲首" />
+          </label>
+          <label>
+            <span id="semanticLabel">義符</span>
+            <input id="semanticInput" type="search" autocomplete="off" placeholder="義符，可用空格分隔" />
+          </label>
+          <label>
+            <span id="wordLabel">詞</span>
+            <input id="wordInput" type="search" autocomplete="off" placeholder="詞義或詞例" />
+          </label>
+        </div>
+        <p id="annotationFilterStatus" class="filter-note" hidden></p>
 
         <div class="filter-row">
           <label>

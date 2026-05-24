@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>字形協作標註</title>
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="./assets/fonts/fonts.css" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="app-shell review-shell">
+      <header class="topbar review-topbar">
+        <div>
+          <p class="kicker">協作標註</p>
+          <h1>字形協作標註</h1>
+          <p id="annotationMeta" class="dataset-meta">正在載入資料...</p>
+        </div>
+        <div class="top-actions">
+          <a class="meta-link" href="./index.html">返回檢索</a>
+          <a class="meta-link" href="./pua-filter.html">PUA 篩選</a>
+        </div>
+      </header>
+
+      <section class="review-toolbar annotation-toolbar" aria-label="標註工具">
+        <label class="search-box">
+          <span>定位字圖</span>
+          <input id="annotationSearch" type="search" autocomplete="off" placeholder="字頭、器名、來源、記錄 ID" />
+        </label>
+        <label>
+          <span>分編</span>
+          <select id="annotationBookFilter"></select>
+        </label>
+        <label>
+          <span>時期</span>
+          <select id="annotationPeriodFilter"></select>
+        </label>
+        <label>
+          <span>進度</span>
+          <select id="annotationProgressFilter">
+            <option value="all">全部</option>
+            <option value="filled">已標註</option>
+            <option value="empty">未標註</option>
+          </select>
+        </label>
+        <div class="review-actions">
+          <label class="import-button">
+            匯入 JSON
+            <input id="annotationImport" type="file" accept="application/json,.json" />
+          </label>
+          <button id="annotationExport" class="ghost-button" type="button">導出 JSON</button>
+          <button id="annotationClear" class="ghost-button" type="button">清空本機草稿</button>
+        </div>
+      </section>
+
+      <section class="status-row review-status" aria-live="polite">
+        <div id="annotationCount">0 筆字圖</div>
+        <div id="annotationSaveState">資料只保存在本機瀏覽器，請定期導出 JSON。</div>
+      </section>
+
+      <section class="annotation-workbench">
+        <div>
+          <section id="annotationList" class="annotation-list" aria-label="字圖列表"></section>
+          <div class="load-more-wrap">
+            <button id="annotationLoadMore" class="load-more" type="button" hidden>載入更多</button>
+          </div>
+        </div>
+
+        <section id="annotationEmpty" class="empty-state annotation-empty">請先從左側選擇一個字圖。</section>
+
+        <section id="annotationEditor" class="annotation-editor" hidden>
+          <div class="annotation-record-panel">
+            <img id="selectedGlyphImage" class="annotation-record-image" alt="" />
+            <div class="annotation-record-body">
+              <h2 id="selectedTitle" class="annotation-record-title"></h2>
+              <p id="selectedHeads" class="annotation-record-line"></p>
+              <p id="selectedSource" class="annotation-record-line"></p>
+              <p id="selectedPages" class="annotation-record-line"></p>
+            </div>
+          </div>
+
+          <form id="annotationForm" class="annotation-form-panel">
+            <div class="annotation-form-grid">
+              <label>
+                <span>校正主字頭</span>
+                <input id="mainOverride" type="text" autocomplete="off" placeholder="留空則沿用原主字頭" />
+              </label>
+              <label>
+                <span>校正子字頭</span>
+                <input id="subOverride" type="text" autocomplete="off" placeholder="留空則沿用原子字頭" />
+              </label>
+              <label>
+                <span>諧聲域</span>
+                <input id="xieshengDomain" type="text" autocomplete="off" placeholder="大寫字母，如 A" />
+              </label>
+              <label>
+                <span>義符</span>
+                <input id="semanticComponents" type="text" autocomplete="off" placeholder="多個義符用空格、頓號或逗號分隔" />
+              </label>
+
+              <div class="field-group full">
+                <span>聲首</span>
+                <div id="phoneticRows" class="dynamic-rows"></div>
+                <button id="addPhonetic" class="ghost-button" type="button">新增聲首</button>
+              </div>
+
+              <div class="field-group full">
+                <span>詞</span>
+                <div id="wordRows" class="dynamic-rows"></div>
+                <button id="addWord" class="ghost-button" type="button">新增詞義/詞例</button>
+              </div>
+
+              <label class="full">
+                <span>備註 / 出處</span>
+                <textarea id="annotationNote" placeholder="可填考釋依據、出處、疑問或協作者說明"></textarea>
+              </label>
+            </div>
+
+            <div class="annotation-form-actions">
+              <button id="clearCurrent" class="ghost-button" type="button">清除此條標註</button>
+              <button id="previousRecord" class="ghost-button" type="button">上一條</button>
+              <button id="nextRecord" class="ghost-button" type="button">下一條</button>
+              <span id="currentSaveState" class="annotation-save-state">尚未選擇</span>
+            </div>
+          </form>
+        </section>
+      </section>
+    </main>
+
+    <template id="annotationListTemplate">
+      <button class="annotation-list-item" type="button">
+        <img class="annotation-list-image" loading="lazy" alt="" />
+        <span class="annotation-item-main">
+          <span class="annotation-item-title"></span>
+          <span class="annotation-item-meta"></span>
+          <span class="annotation-status-pill">未標註</span>
+        </span>
+      </button>
+    </template>
+
+    <template id="phoneticRowTemplate">
+      <div class="phonetic-row">
+        <label>
+          <span>一級聲首</span>
+          <input class="phonetic-primary" type="text" autocomplete="off" />
+        </label>
+        <label>
+          <span>二級聲首</span>
+          <input class="phonetic-secondary" type="text" autocomplete="off" placeholder="多個用空格、頓號或逗號分隔" />
+        </label>
+        <button class="remove-row-button" type="button" data-remove-row>刪除</button>
+      </div>
+    </template>
+
+    <template id="wordRowTemplate">
+      <div class="word-row">
+        <label>
+          <span>詞義</span>
+          <input class="word-meaning" type="text" autocomplete="off" />
+        </label>
+        <label>
+          <span>詞例</span>
+          <input class="word-example" type="text" autocomplete="off" placeholder="此字所在器物中的詞例" />
+        </label>
+        <button class="remove-row-button" type="button" data-remove-row>刪除</button>
+      </div>
+    </template>
+
+    <script src="./annotate.js" type="module"></script>
+  </body>
+</html>

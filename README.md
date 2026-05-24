@@ -12,7 +12,34 @@ python -m http.server 4173 --directory site
 
 PUA/未編碼字的篩選頁在 `http://localhost:4173/pua-filter.html`，可查看字頭可定位、僅上下文命中、CID 與未定位等類型。
 
+協作標註頁在 `http://localhost:4173/annotate.html`。協作者可以為每個字圖填寫諧聲域、聲首、義符、詞義/詞例、備註以及字頭校正，資料保存在本機瀏覽器中，完成後可導出 JSON 發回維護者。
+
 PDF 抽取時無法直接解碼的 CID 字形會以 PDF 文字層裁切小圖顯示，普通檢索不以 `(cid:xxxx)` 佔位符作為器名或來源文本。
+
+## 協作標註資料
+
+主站會讀取 `site/data/annotations.json` 中的標註資料，並在檢索頁新增諧聲域、聲首、義符與詞四類檢索欄位；其中諧聲域欄支持正則檢索。
+
+標註頁導出的 JSON 采用 `jinwen-glyph-annotations-v1` 格式。每筆資料以字圖記錄 ID 為鍵，核心字段如下：
+
+```json
+{
+  "records": {
+    "672fdd9dae172941": {
+      "headOverride": { "main": "", "sub": "" },
+      "xieshengDomain": "A",
+      "phoneticInitials": [
+        { "primary": "某", "secondary": ["某"] }
+      ],
+      "semanticComponents": ["金"],
+      "words": [
+        { "meaning": "詞義", "example": "器物中的詞例" }
+      ],
+      "note": "出處或說明"
+    }
+  }
+}
+```
 
 ## GitHub Pages
 

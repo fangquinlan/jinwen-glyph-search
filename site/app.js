@@ -16,6 +16,7 @@ const state = {
   puaIds: {},
   inlineGlyphs: {},
   cidGlyphs: {},
+  annotations: {},
   meta: null,
   lang: storedLanguage(),
   mode: "head",
@@ -23,6 +24,11 @@ const state = {
   view: "detail",
   headQuery: "",
   objectQuery: "",
+  domainQuery: "",
+  phoneticQuery: "",
+  semanticQuery: "",
+  wordQuery: "",
+  domainRegexError: "",
   book: "",
   period: "",
   visible: 80,
@@ -33,6 +39,15 @@ const els = {
   datasetMeta: document.querySelector("#datasetMeta"),
   headInput: document.querySelector("#headInput"),
   objectInput: document.querySelector("#objectInput"),
+  domainInput: document.querySelector("#domainInput"),
+  phoneticInput: document.querySelector("#phoneticInput"),
+  semanticInput: document.querySelector("#semanticInput"),
+  wordInput: document.querySelector("#wordInput"),
+  domainLabel: document.querySelector("#domainLabel"),
+  phoneticLabel: document.querySelector("#phoneticLabel"),
+  semanticLabel: document.querySelector("#semanticLabel"),
+  wordLabel: document.querySelector("#wordLabel"),
+  annotationFilterStatus: document.querySelector("#annotationFilterStatus"),
   bookFilter: document.querySelector("#bookFilter"),
   periodFilter: document.querySelector("#periodFilter"),
   clearButton: document.querySelector("#clearButton"),
@@ -47,6 +62,7 @@ const els = {
   viewButtons: [...document.querySelectorAll(".view-button")],
   langButtons: [...document.querySelectorAll(".lang-button")],
   puaLink: document.querySelector("#puaLink"),
+  annotateLink: document.querySelector("#annotateLink"),
   searchPanel: document.querySelector(".search-panel"),
   modeLabel: document.querySelector("#modeLabel"),
   scopeLabel: document.querySelector("#scopeLabel"),
@@ -81,6 +97,22 @@ const I18N = {
     resultCount: "{count} 筆結果",
     puaStatus: "PUA/未編碼：{manual} 個 · 內嵌字型：{fonts} 個 · 圖片字：{inline} 個",
     puaList: "PUA 篩選",
+    annotateList: "協作標註",
+    annotationSearchLabel: "擴展標註檢索",
+    domainLabel: "諧聲域",
+    domainPlaceholder: "支援正則，如 ^A$ 或 [AB]",
+    phoneticLabel: "聲首",
+    phoneticPlaceholder: "一級或二級聲首",
+    semanticLabel: "義符",
+    semanticPlaceholder: "義符，可用空格分隔",
+    wordLabel: "詞",
+    wordPlaceholder: "詞義或詞例",
+    domainRegexError: "諧聲域正則式無效：{message}",
+    xieshengDomain: "諧聲域",
+    phoneticInitial: "聲首",
+    semanticComponent: "義符",
+    word: "詞",
+    note: "備註",
     viewAria: "結果視圖",
     detail: "詳細",
     compact: "緊湊",
@@ -125,6 +157,22 @@ const I18N = {
     resultCount: "{count} results",
     puaStatus: "PUA/unencoded: {manual} · embedded fonts: {fonts} · image glyphs: {inline}",
     puaList: "PUA filter",
+    annotateList: "Collaborative tags",
+    annotationSearchLabel: "Extended tag search",
+    domainLabel: "Xiesheng domain",
+    domainPlaceholder: "Regex supported, e.g. ^A$ or [AB]",
+    phoneticLabel: "Phonetic initial",
+    phoneticPlaceholder: "Primary or secondary initial",
+    semanticLabel: "Semantic sign",
+    semanticPlaceholder: "Semantic signs, separated by spaces",
+    wordLabel: "Word",
+    wordPlaceholder: "Meaning or example",
+    domainRegexError: "Invalid xiesheng-domain regex: {message}",
+    xieshengDomain: "Xiesheng",
+    phoneticInitial: "Initial",
+    semanticComponent: "Semantic",
+    word: "Word",
+    note: "Note",
     viewAria: "Result view",
     detail: "Detail",
     compact: "Compact",
@@ -169,6 +217,22 @@ const I18N = {
     resultCount: "{count} 件",
     puaStatus: "PUA/未符号化：{manual} 個 · 埋込フォント：{fonts} 個 · 画像字：{inline} 個",
     puaList: "PUA フィルタ",
+    annotateList: "共同注記",
+    annotationSearchLabel: "拡張注記検索",
+    domainLabel: "諧声域",
+    domainPlaceholder: "正規表現可。例：^A$ または [AB]",
+    phoneticLabel: "声首",
+    phoneticPlaceholder: "一次または二次声首",
+    semanticLabel: "義符",
+    semanticPlaceholder: "義符。空白で区切る",
+    wordLabel: "語",
+    wordPlaceholder: "語義または用例",
+    domainRegexError: "諧声域の正規表現が無効です：{message}",
+    xieshengDomain: "諧声域",
+    phoneticInitial: "声首",
+    semanticComponent: "義符",
+    word: "語",
+    note: "備考",
     viewAria: "結果表示",
     detail: "詳細",
     compact: "コンパクト",
@@ -354,6 +418,20 @@ function normalize(value) {
   return (value || "").trim().toLocaleLowerCase();
 }
 
+function compactSpaces(value) {
+  return String(value || "").trim().replace(/\s+/g, " ");
+}
+
+function splitTags(value) {
+  if (Array.isArray(value)) {
+    return value.map(compactSpaces).filter(Boolean);
+  }
+  return String(value || "")
+    .split(/[、,，;；\n\r\t ]+/)
+    .map(compactSpaces)
+    .filter(Boolean);
+}
+
 function stripCidPlaceholders(value) {
   return (value || "").replace(CID_RE, " ");
 }
@@ -423,6 +501,101 @@ function matchesObjectQuery(record, terms) {
   }
   const text = objectText(record);
   return terms.every((term) => text.includes(term));
+}
+
+function normalizeAnnotations(data) {
+  const source = data?.records || data?.annotations || data || {};
+  const output = {};
+  for (const [id, raw] of Object.entries(source)) {
+    const annotation = normalizeAnnotation(raw);
+    if (hasAnnotation(annotation)) {
+      output[id] = annotation;
+    }
+  }
+  return output;
+}
+
+function normalizeAnnotation(raw = {}) {
+  const headOverride = raw.headOverride || {};
+  const phoneticSource = raw.phoneticInitials || raw.phonetics || [];
+  const wordSource = raw.words || [];
+  return {
+    headOverride: {
+      main: compactSpaces(headOverride.main || raw.mainOverride || ""),
+      sub: compactSpaces(headOverride.sub || raw.subOverride || ""),
+    },
+    xieshengDomain: compactSpaces(raw.xieshengDomain || raw.domain || "").toUpperCase(),
+    phoneticInitials: Array.isArray(phoneticSource)
+      ? phoneticSource
+          .map((item) => ({
+            primary: compactSpaces(item?.primary || item?.level1 || ""),
+            secondary: splitTags(item?.secondary || item?.level2 || []),
+          }))
+          .filter((item) => item.primary || item.secondary.length)
+      : [],
+    semanticComponents: splitTags(raw.semanticComponents || raw.semantic || []),
+    words: Array.isArray(wordSource)
+      ? wordSource
+          .map((item) => ({
+            meaning: compactSpaces(item?.meaning || item?.sense || ""),
+            example: compactSpaces(item?.example || ""),
+          }))
+          .filter((item) => item.meaning || item.example)
+      : [],
+    note: compactSpaces(raw.note || raw.remark || ""),
+  };
+}
+
+function hasAnnotation(annotation) {
+  return Boolean(
+    annotation &&
+      (annotation.headOverride?.main ||
+        annotation.headOverride?.sub ||
+        annotation.xieshengDomain ||
+        annotation.phoneticInitials?.length ||
+        annotation.semanticComponents?.length ||
+        annotation.words?.length ||
+        annotation.note)
+  );
+}
+
+function displayMain(record) {
+  return record.annotation?.headOverride?.main || record.main;
+}
+
+function displaySub(record) {
+  return record.annotation?.headOverride?.sub || record.sub;
+}
+
+function phoneticText(annotation) {
+  return (annotation?.phoneticInitials || [])
+    .map((item) => [item.primary, ...(item.secondary || [])].filter(Boolean).join(" "))
+    .join(" ");
+}
+
+function wordsText(annotation) {
+  return (annotation?.words || []).map((item) => `${item.meaning || ""} ${item.example || ""}`).join(" ");
+}
+
+function annotationSearchText(record, key) {
+  const annotation = record.annotation;
+  if (!annotation) {
+    return "";
+  }
+  if (key === "phonetic") {
+    return normalize(phoneticText(annotation));
+  }
+  if (key === "semantic") {
+    return normalize((annotation.semanticComponents || []).join(" "));
+  }
+  if (key === "word") {
+    return normalize(wordsText(annotation));
+  }
+  return "";
+}
+
+function termsMatch(text, terms) {
+  return !terms.length || terms.every((term) => text.includes(term));
 }
 
 function isInlineGlyphChar(char) {
@@ -542,17 +715,47 @@ function calibrateInlineGlyphs(root = els.results) {
 function applyFilters() {
   const headTerms = normalize(state.headQuery).split(/\s+/).filter(Boolean);
   const objectTerms = normalize(state.objectQuery).split(/\s+/).filter(Boolean);
+  const phoneticTerms = normalize(state.phoneticQuery).split(/\s+/).filter(Boolean);
+  const semanticTerms = normalize(state.semanticQuery).split(/\s+/).filter(Boolean);
+  const wordTerms = normalize(state.wordQuery).split(/\s+/).filter(Boolean);
+  const domainRegex = compileDomainRegex();
   state.filtered = state.records.filter((record) => {
+    if (domainRegex === false) {
+      return false;
+    }
     if (state.book && record.book !== state.book) {
       return false;
     }
     if (state.period && record.period !== state.period) {
       return false;
     }
-    return matchesHeadQuery(record, headTerms) && matchesObjectQuery(record, objectTerms);
+    if (!matchesHeadQuery(record, headTerms) || !matchesObjectQuery(record, objectTerms)) {
+      return false;
+    }
+    if (domainRegex && !domainRegex.test(record.annotation?.xieshengDomain || "")) {
+      return false;
+    }
+    return (
+      termsMatch(annotationSearchText(record, "phonetic"), phoneticTerms) &&
+      termsMatch(annotationSearchText(record, "semantic"), semanticTerms) &&
+      termsMatch(annotationSearchText(record, "word"), wordTerms)
+    );
   }).sort(compareRecords);
   state.visible = Math.min(state.visible, Math.max(80, state.visible));
   renderResults();
+}
+
+function renderAnnotationFilterStatus() {
+  if (!els.annotationFilterStatus) {
+    return;
+  }
+  if (state.domainRegexError) {
+    els.annotationFilterStatus.hidden = false;
+    els.annotationFilterStatus.textContent = t("domainRegexError", { message: state.domainRegexError });
+    return;
+  }
+  els.annotationFilterStatus.hidden = true;
+  els.annotationFilterStatus.textContent = "";
 }
 
 function tokenLabel(labelKey, value) {
@@ -570,12 +773,20 @@ function codepoints(value) {
 
 function prepareRecords(records) {
   return records.map((record) => {
+    const annotation = state.annotations[record.id] || null;
+    const main = annotation?.headOverride?.main || record.main;
+    const sub = annotation?.headOverride?.sub || record.sub;
     const componentChars = [...new Set(stripCidPlaceholders(record.componentHead).split("").filter((char) => !/\s/.test(char)))];
     return {
       ...record,
-      searchMain: normalize(stripCidPlaceholders(record.main)),
-      searchSub: normalize(stripCidPlaceholders(record.sub)),
-      searchHead: normalize([stripCidPlaceholders(record.main), stripCidPlaceholders(record.sub)].join(" ")),
+      annotation,
+      searchMain: normalize([stripCidPlaceholders(main), stripCidPlaceholders(record.main)].join(" ")),
+      searchSub: normalize([stripCidPlaceholders(sub), stripCidPlaceholders(record.sub)].join(" ")),
+      searchHead: normalize(
+        [stripCidPlaceholders(main), stripCidPlaceholders(sub), stripCidPlaceholders(record.main), stripCidPlaceholders(record.sub)].join(
+          " "
+        )
+      ),
       searchObject: normalize([stripCidPlaceholders(record.title), stripCidPlaceholders(record.source)].join(" ")),
       searchComponent: normalize(
         componentChars
@@ -584,6 +795,20 @@ function prepareRecords(records) {
       ),
     };
   });
+}
+
+function compileDomainRegex() {
+  state.domainRegexError = "";
+  const query = state.domainQuery.trim();
+  if (!query) {
+    return null;
+  }
+  try {
+    return new RegExp(query, "i");
+  } catch (error) {
+    state.domainRegexError = error.message;
+    return false;
+  }
 }
 
 function renderResults() {
@@ -606,6 +831,7 @@ function renderResults() {
   }
 
   els.loadMoreButton.hidden = state.filtered.length <= state.visible;
+  renderAnnotationFilterStatus();
   calibrateInlineGlyphs();
 }
 
@@ -657,13 +883,13 @@ function renderRecord(record) {
   const node = els.template.content.firstElementChild.cloneNode(true);
   const image = node.querySelector(".glyph-image");
   image.src = record.image;
-  image.alt = `${record.main || ""} ${record.sub || ""} ${record.title || ""}`.trim();
+  image.alt = `${displayMain(record) || ""} ${displaySub(record) || ""} ${record.title || ""}`.trim();
 
   const main = node.querySelector(".main-token");
-  setTokenLabel(main, "main", record.main);
+  setTokenLabel(main, "main", displayMain(record));
 
   const sub = node.querySelector(".sub-token");
-  setTokenLabel(sub, "sub", record.sub);
+  setTokenLabel(sub, "sub", displaySub(record));
 
   node.querySelector(".period-pill").textContent = record.period ? localizedPeriod(record.period) : t("periodMissing");
   setRichText(node.querySelector(".record-title"), record.title, t("objectMissing"));
@@ -678,15 +904,63 @@ function renderRecord(record) {
     pageParts.push(t("printPage", { page: record.printPage }));
   }
   node.querySelector(".page-line").textContent = pageParts.join(" · ");
+  appendAnnotationSummary(node.querySelector(".result-body"), record.annotation);
   return node;
+}
+
+function appendAnnotationSummary(parent, annotation) {
+  if (!hasAnnotation(annotation)) {
+    return;
+  }
+  const row = document.createElement("div");
+  row.className = "annotation-summary";
+
+  if (annotation.xieshengDomain) {
+    row.append(annotationChip(t("xieshengDomain"), annotation.xieshengDomain));
+  }
+  if (annotation.phoneticInitials?.length) {
+    row.append(annotationChip(t("phoneticInitial"), formatPhoneticInitials(annotation.phoneticInitials)));
+  }
+  if (annotation.semanticComponents?.length) {
+    row.append(annotationChip(t("semanticComponent"), annotation.semanticComponents.join("、")));
+  }
+  if (annotation.words?.length) {
+    const text = annotation.words
+      .slice(0, 2)
+      .map((item) => [item.meaning, item.example].filter(Boolean).join("："))
+      .join("；");
+    row.append(annotationChip(t("word"), text));
+  }
+  if (annotation.note) {
+    row.append(annotationChip(t("note"), annotation.note));
+  }
+  parent.append(row);
+}
+
+function formatPhoneticInitials(items) {
+  return items
+    .map((item) => {
+      const secondary = item.secondary?.length ? `(${item.secondary.join("、")})` : "";
+      return `${item.primary || ""}${secondary}`;
+    })
+    .filter(Boolean)
+    .join("、");
+}
+
+function annotationChip(label, value) {
+  const chip = document.createElement("span");
+  chip.className = "annotation-chip";
+  chip.append(document.createTextNode(`${label}: `));
+  appendRichText(chip, value);
+  return chip;
 }
 
 function renderCompactRecord(record) {
   const node = document.createElement("article");
   node.className = "compact-card";
   node.title = [
-    tokenLabel("main", record.main),
-    tokenLabel("sub", record.sub),
+    tokenLabel("main", displayMain(record)),
+    tokenLabel("sub", displaySub(record)),
     record.title || t("objectMissing"),
     record.source || t("sourceMissing"),
   ].join(" · ");
@@ -698,7 +972,7 @@ function renderCompactRecord(record) {
   image.className = "compact-glyph-image";
   image.loading = "lazy";
   image.src = record.image;
-  image.alt = `${record.main || ""} ${record.sub || ""} ${record.title || ""}`.trim();
+  image.alt = `${displayMain(record) || ""} ${displaySub(record) || ""} ${record.title || ""}`.trim();
   frame.append(image);
 
   const period = document.createElement("div");
@@ -756,6 +1030,8 @@ function applyLanguage({ rerender = true } = {}) {
   els.searchPanel.setAttribute("aria-label", t("searchPanelLabel"));
   els.puaLink.textContent = t("puaList");
   els.puaLink.setAttribute("aria-label", t("puaList"));
+  els.annotateLink.textContent = t("annotateList");
+  els.annotateLink.setAttribute("aria-label", t("annotateList"));
   document.querySelector(".lang-control").setAttribute("aria-label", t("langAria"));
 
   const labels = document.querySelectorAll(".search-box span");
@@ -763,6 +1039,15 @@ function applyLanguage({ rerender = true } = {}) {
   labels[1].textContent = t("objectLabel");
   els.headInput.placeholder = t("headInputPlaceholder");
   els.objectInput.placeholder = t("objectPlaceholder");
+  document.querySelector(".annotation-row").setAttribute("aria-label", t("annotationSearchLabel"));
+  els.domainLabel.textContent = t("domainLabel");
+  els.domainInput.placeholder = t("domainPlaceholder");
+  els.phoneticLabel.textContent = t("phoneticLabel");
+  els.phoneticInput.placeholder = t("phoneticPlaceholder");
+  els.semanticLabel.textContent = t("semanticLabel");
+  els.semanticInput.placeholder = t("semanticPlaceholder");
+  els.wordLabel.textContent = t("wordLabel");
+  els.wordInput.placeholder = t("wordPlaceholder");
   els.modeLabel.textContent = t("modeLabel");
   els.scopeLabel.textContent = t("scopeLabel");
   document.querySelector(".mode-control").setAttribute("aria-label", t("modeAria"));
@@ -813,6 +1098,30 @@ function wireEvents() {
 
   els.objectInput.addEventListener("input", () => {
     state.objectQuery = els.objectInput.value;
+    state.visible = 80;
+    scheduleApplyFilters();
+  });
+
+  els.domainInput.addEventListener("input", () => {
+    state.domainQuery = els.domainInput.value;
+    state.visible = 80;
+    scheduleApplyFilters();
+  });
+
+  els.phoneticInput.addEventListener("input", () => {
+    state.phoneticQuery = els.phoneticInput.value;
+    state.visible = 80;
+    scheduleApplyFilters();
+  });
+
+  els.semanticInput.addEventListener("input", () => {
+    state.semanticQuery = els.semanticInput.value;
+    state.visible = 80;
+    scheduleApplyFilters();
+  });
+
+  els.wordInput.addEventListener("input", () => {
+    state.wordQuery = els.wordInput.value;
     state.visible = 80;
     scheduleApplyFilters();
   });
@@ -872,11 +1181,20 @@ function wireEvents() {
   els.clearButton.addEventListener("click", () => {
     state.headQuery = "";
     state.objectQuery = "";
+    state.domainQuery = "";
+    state.phoneticQuery = "";
+    state.semanticQuery = "";
+    state.wordQuery = "";
+    state.domainRegexError = "";
     state.book = "";
     state.period = "";
     state.visible = 80;
     els.headInput.value = "";
     els.objectInput.value = "";
+    els.domainInput.value = "";
+    els.phoneticInput.value = "";
+    els.semanticInput.value = "";
+    els.wordInput.value = "";
     els.bookFilter.value = "";
     els.periodFilter.value = "";
     applyFilters();
@@ -908,18 +1226,20 @@ function scheduleApplyFilters() {
 
 async function boot() {
   try {
-    const [records, chars, meta, inlineGlyphs, cidGlyphs, puaIdsText] = await Promise.all([
+    const [records, chars, meta, inlineGlyphs, cidGlyphs, annotations, puaIdsText] = await Promise.all([
       loadJson("./data/records.json"),
       loadJson("./data/chars.json"),
       loadJson("./data/meta.json"),
       loadOptionalJson("./data/inline_glyphs.json"),
       loadOptionalJson("./data/cid_glyphs.json"),
+      loadOptionalJson("./data/annotations.json"),
       loadText("./data/pua_ids.tsv"),
     ]);
     state.chars = chars;
     state.meta = meta;
     state.inlineGlyphs = inlineGlyphs;
     state.cidGlyphs = cidGlyphs;
+    state.annotations = normalizeAnnotations(annotations);
     state.puaIds = filledPuaMap(parseTsv(puaIdsText));
     state.records = prepareRecords(records);
 
