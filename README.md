@@ -12,6 +12,8 @@ python -m http.server 4173 --directory site
 
 PUA/未編碼字的篩選頁在 `http://localhost:4173/pua-filter.html`，可查看字頭可定位、僅上下文命中、CID 與未定位等類型。
 
+PDF 抽取時無法直接解碼的 CID 字形會以 PDF 文字層裁切小圖顯示，普通檢索不以 `(cid:xxxx)` 佔位符作為器名或來源文本。
+
 ## GitHub Pages
 
 本倉庫使用 GitHub Actions 將 `site/` 目錄部署到 GitHub Pages。

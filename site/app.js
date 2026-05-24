@@ -15,6 +15,7 @@ const state = {
   chars: {},
   puaIds: {},
   inlineGlyphs: {},
+  cidGlyphs: {},
   meta: null,
   lang: storedLanguage(),
   mode: "head",
@@ -221,6 +222,7 @@ const BOOK_RANK = new Map([
   ["單一族徽", 2],
   ["複合族徽", 3],
 ]);
+const CID_RE = /\(cid:\d+\)/gi;
 
 const PERIOD_LABELS = {
   en: {
@@ -352,6 +354,10 @@ function normalize(value) {
   return (value || "").trim().toLocaleLowerCase();
 }
 
+function stripCidPlaceholders(value) {
+  return (value || "").replace(CID_RE, " ");
+}
+
 function formatNumber(value) {
   return Number(value || 0).toLocaleString(state.lang === "zh-Hant" ? "zh-Hant" : state.lang);
 }
@@ -383,30 +389,20 @@ function compareRecords(a, b) {
 
 function headText(record) {
   if (state.headScope === "main") {
-    return normalize(record.main);
+    return record.searchMain;
   }
   if (state.headScope === "sub") {
-    return normalize(record.sub);
+    return record.searchSub;
   }
-  return normalize([record.main, record.sub].join(" "));
+  return record.searchHead;
 }
 
 function objectText(record) {
-  return normalize(
-    [
-      record.title,
-      record.source,
-    ].join(" ")
-  );
+  return record.searchObject;
 }
 
 function componentTextForRecord(record) {
-  const chars = [...new Set((record.componentHead || "").split(""))];
-  return chars
-    .map((char) => {
-      return [char, state.chars[char] || "", state.puaIds[char] || ""].join(" ");
-    })
-    .join(" ");
+  return record.searchComponent;
 }
 
 function matchesHeadQuery(record, terms) {
@@ -438,8 +434,39 @@ function isInlineGlyphChar(char) {
   );
 }
 
+function cidLabel(token) {
+  const number = /\d+/.exec(token || "")?.[0] || "";
+  return number ? `PDF 未解碼字 ${number}` : "PDF 未解碼字";
+}
+
+function appendCidGlyph(parent, token) {
+  const path = state.cidGlyphs[token];
+  if (!path) {
+    const span = document.createElement("span");
+    span.className = "cid-fallback";
+    span.textContent = cidLabel(token);
+    parent.append(span);
+    return;
+  }
+  const image = document.createElement("img");
+  image.className = "cid-inline-glyph";
+  image.src = path;
+  image.alt = cidLabel(token);
+  image.title = cidLabel(token);
+  image.loading = "lazy";
+  parent.append(image);
+}
+
 function appendRichText(parent, value) {
-  for (const char of Array.from(value || "")) {
+  const text = value || "";
+  let offset = 0;
+  for (const match of text.matchAll(CID_RE)) {
+    appendRichText(parent, text.slice(offset, match.index));
+    appendCidGlyph(parent, match[0]);
+    offset = match.index + match[0].length;
+  }
+  const rest = text.slice(offset);
+  for (const char of Array.from(rest)) {
     if (isInlineGlyphChar(char)) {
       const glyphPath = state.inlineGlyphs[`U+${char.codePointAt(0).toString(16).toUpperCase()}`];
       const span = document.createElement("span");
@@ -533,9 +560,30 @@ function tokenLabel(labelKey, value) {
 }
 
 function codepoints(value) {
+  if (/^\(cid:\d+\)$/i.test(value || "")) {
+    return cidLabel(value);
+  }
   return [...(value || "")]
     .map((char) => `U+${char.codePointAt(0).toString(16).toUpperCase().padStart(4, "0")}`)
     .join(" ");
+}
+
+function prepareRecords(records) {
+  return records.map((record) => {
+    const componentChars = [...new Set(stripCidPlaceholders(record.componentHead).split("").filter((char) => !/\s/.test(char)))];
+    return {
+      ...record,
+      searchMain: normalize(stripCidPlaceholders(record.main)),
+      searchSub: normalize(stripCidPlaceholders(record.sub)),
+      searchHead: normalize([stripCidPlaceholders(record.main), stripCidPlaceholders(record.sub)].join(" ")),
+      searchObject: normalize([stripCidPlaceholders(record.title), stripCidPlaceholders(record.source)].join(" ")),
+      searchComponent: normalize(
+        componentChars
+          .map((char) => [char, state.chars[char] || "", state.puaIds[char] || ""].join(" "))
+          .join(" ")
+      ),
+    };
+  });
 }
 
 function renderResults() {
@@ -760,13 +808,13 @@ function wireEvents() {
   els.headInput.addEventListener("input", () => {
     state.headQuery = els.headInput.value;
     state.visible = 80;
-    applyFilters();
+    scheduleApplyFilters();
   });
 
   els.objectInput.addEventListener("input", () => {
     state.objectQuery = els.objectInput.value;
     state.visible = 80;
-    applyFilters();
+    scheduleApplyFilters();
   });
 
   els.bookFilter.addEventListener("change", () => {
@@ -851,20 +899,29 @@ function wireEvents() {
   }
 }
 
+let filterTimer = 0;
+
+function scheduleApplyFilters() {
+  clearTimeout(filterTimer);
+  filterTimer = setTimeout(applyFilters, 70);
+}
+
 async function boot() {
   try {
-    const [records, chars, meta, inlineGlyphs, puaIdsText] = await Promise.all([
+    const [records, chars, meta, inlineGlyphs, cidGlyphs, puaIdsText] = await Promise.all([
       loadJson("./data/records.json"),
       loadJson("./data/chars.json"),
       loadJson("./data/meta.json"),
       loadOptionalJson("./data/inline_glyphs.json"),
+      loadOptionalJson("./data/cid_glyphs.json"),
       loadText("./data/pua_ids.tsv"),
     ]);
-    state.records = records;
     state.chars = chars;
     state.meta = meta;
     state.inlineGlyphs = inlineGlyphs;
+    state.cidGlyphs = cidGlyphs;
     state.puaIds = filledPuaMap(parseTsv(puaIdsText));
+    state.records = prepareRecords(records);
 
     wireEvents();
     applyLanguage({ rerender: false });

@@ -329,6 +329,8 @@ select:focus {
   border-radius: var(--radius);
   padding: 12px;
   min-height: 128px;
+  content-visibility: auto;
+  contain-intrinsic-size: 128px;
 }
 
 .glyph-frame {
@@ -417,6 +419,29 @@ select:focus {
   mask: var(--inline-glyph-url) center / contain no-repeat;
 }
 
+.cid-inline-glyph {
+  display: inline-block;
+  width: auto;
+  height: 1.02em;
+  margin-inline: 0.04em;
+  vertical-align: -0.12em;
+}
+
+.review-token .cid-inline-glyph {
+  height: 1em;
+  vertical-align: -0.08em;
+}
+
+.cid-fallback {
+  display: inline-block;
+  min-height: 1em;
+  border-radius: 4px;
+  background: #edf0ef;
+  color: var(--muted);
+  padding: 0 0.18em;
+  font-size: 0.72em;
+}
+
 .source-line,
 .page-line {
   margin: 0;
@@ -452,6 +477,8 @@ select:focus {
   border: 1px solid var(--line);
   border-radius: var(--radius);
   padding: 8px;
+  content-visibility: auto;
+  contain-intrinsic-size: 132px;
 }
 
 .compact-glyph-frame {
@@ -592,6 +619,8 @@ select:focus {
   border: 1px solid var(--line);
   border-radius: var(--radius);
   padding: 14px;
+  content-visibility: auto;
+  contain-intrinsic-size: 186px;
 }
 
 .pua-card {

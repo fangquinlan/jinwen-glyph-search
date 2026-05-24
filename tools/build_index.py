@@ -26,6 +26,8 @@ FONT_DIR = SITE_DIR / "assets" / "fonts"
 FONT_CSS = FONT_DIR / "fonts.css"
 INLINE_GLYPH_DIR = SITE_DIR / "assets" / "inline-glyphs"
 INLINE_GLYPH_JSON = DATA_DIR / "inline_glyphs.json"
+CID_GLYPH_DIR = SITE_DIR / "assets" / "cid-glyphs"
+CID_GLYPH_JSON = DATA_DIR / "cid_glyphs.json"
 RARE_FONT_UNICODE_RANGE = (
     "U+3400-4DBF, "
     "U+20000-2A6DF, U+2A700-2B73F, U+2B740-2B81F, U+2B820-2CEAF, "
@@ -693,6 +695,108 @@ def export_inline_glyph_images(records: list[dict], fonts: list[dict[str, object
     return exported
 
 
+def first_cid_sources(records: list[dict]) -> dict[str, dict[str, object]]:
+    sources: dict[str, dict[str, object]] = {}
+    for record in records:
+        for field in ("main", "sub", "title", "source"):
+            for token in CID_RE.findall(str(record.get(field, ""))):
+                sources.setdefault(
+                    token,
+                    {
+                        "book": record.get("book", ""),
+                        "pdfPage": int(record.get("pdfPage") or 0),
+                    },
+                )
+    return sources
+
+
+def alpha_cid_image(image: Image.Image) -> Image.Image:
+    image = image.convert("RGBA")
+    gray = ImageOps.grayscale(image)
+    alpha = ImageOps.invert(gray).point(lambda pixel: 255 if pixel > 28 else 0)
+    ink_bbox = alpha.getbbox()
+    if not ink_bbox:
+        return image
+    transparent = Image.new("RGBA", image.size, (20, 20, 20, 0))
+    transparent.putalpha(alpha)
+    cropped = transparent.crop(ink_bbox)
+    padded = Image.new("RGBA", (cropped.width + 8, cropped.height + 8), (20, 20, 20, 0))
+    padded.alpha_composite(cropped, (4, 4))
+    return padded
+
+
+def export_cid_glyph_images(pdfs: list[Path], records: list[dict]) -> dict[str, str]:
+    cid_sources = first_cid_sources(records)
+    if not cid_sources:
+        return {}
+
+    if CID_GLYPH_DIR.exists():
+        resolved = CID_GLYPH_DIR.resolve()
+        expected = (SITE_DIR / "assets" / "cid-glyphs").resolve()
+        if resolved == expected:
+            shutil.rmtree(CID_GLYPH_DIR)
+    CID_GLYPH_DIR.mkdir(parents=True, exist_ok=True)
+
+    by_book_page: dict[tuple[str, int], set[str]] = {}
+    for token, source in cid_sources.items():
+        book = str(source.get("book") or "")
+        page_number = int(source.get("pdfPage") or 0)
+        if book and page_number:
+            by_book_page.setdefault((book, page_number), set()).add(token)
+
+    positions: dict[str, dict[str, object]] = {}
+    for pdf_path in pdfs:
+        pdf_kind = classify_pdf(pdf_path)
+        page_numbers = sorted(page for (book, page) in by_book_page if book == pdf_kind)
+        if not page_numbers:
+            continue
+        with pdfplumber.open(pdf_path) as plumber_pdf:
+            for page_number in page_numbers:
+                targets = by_book_page[(pdf_kind, page_number)]
+                page = plumber_pdf.pages[page_number - 1]
+                for char in page.chars:
+                    token = char.get("text", "")
+                    if token in targets and token not in positions:
+                        positions[token] = {
+                            "pdf": pdf_path,
+                            "pageIndex": page_number - 1,
+                            "bbox": (
+                                float(char["x0"]),
+                                float(char["top"]),
+                                float(char["x1"]),
+                                float(char["bottom"]),
+                            ),
+                        }
+                if hasattr(page, "flush_cache"):
+                    page.flush_cache()
+
+    output: dict[str, str] = {}
+    open_docs: dict[Path, fitz.Document] = {}
+    try:
+        for token, source in sorted(positions.items(), key=lambda item: int(re.search(r"\d+", item[0]).group())):
+            pdf_path = Path(source["pdf"])
+            doc = open_docs.get(pdf_path)
+            if doc is None:
+                doc = fitz.open(pdf_path)
+                open_docs[pdf_path] = doc
+            page = doc[int(source["pageIndex"])]
+            x0, top, x1, bottom = source["bbox"]
+            pad = 2.5
+            clip = fitz.Rect(max(0, x0 - pad), max(0, top - pad), x1 + pad, bottom + pad)
+            pix = page.get_pixmap(matrix=fitz.Matrix(8, 8), clip=clip, alpha=False)
+            image = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+            image = alpha_cid_image(image)
+            digest = hashlib.sha1(token.encode("utf-8")).hexdigest()[:12]
+            relative_path = Path("assets") / "cid-glyphs" / f"{digest}.webp"
+            image.save(SITE_DIR / relative_path, "WEBP", lossless=True, quality=100, method=6)
+            output[token] = str(relative_path).replace("\\", "/")
+    finally:
+        for doc in open_docs.values():
+            doc.close()
+
+    return output
+
+
 def subset_font_bytes(font_path: Path, codepoints: set[int]) -> tuple[bytes, str] | None:
     for flavor, extension in (("woff2", "woff2"), (None, "ttf")):
         try:
@@ -1075,6 +1179,7 @@ def build_index(limit_pages: int | None, thumb_size: int, keep_images: bool) -> 
     char_index = build_char_index(records, ids_map)
     font_files = export_pdf_fonts(pdfs, records)
     inline_glyphs = export_inline_glyph_images(records, font_files)
+    cid_glyphs = export_cid_glyph_images(pdfs, records)
     meta = {
         "recordCount": len(records),
         "bookCount": len(books),
@@ -1085,12 +1190,14 @@ def build_index(limit_pages: int | None, thumb_size: int, keep_images: bool) -> 
         "fontCount": len(font_files),
         "fonts": font_files,
         "inlineGlyphCount": len(inline_glyphs),
+        "cidGlyphCount": len(cid_glyphs),
     }
 
     write_json(DATA_DIR / "records.json", records)
     write_json(DATA_DIR / "chars.json", char_index)
     write_json(DATA_DIR / "meta.json", meta)
     write_json(INLINE_GLYPH_JSON, inline_glyphs)
+    write_json(CID_GLYPH_JSON, cid_glyphs)
     write_manual_ids_files(manual_tokens)
     print(
         f"[DONE] {len(records)} records, {len(char_index)} indexed head chars, {len(manual_tokens)} manual IDS tokens.",

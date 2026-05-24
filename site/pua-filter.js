@@ -17,14 +17,16 @@ const KIND_ORDER = new Map([
 const KIND_LABELS = {
   head: "字頭可定位",
   context: "僅上下文命中",
-  cid: "CID",
+  cid: "PDF 未解碼",
   unlocated: "未定位",
 };
 
 const state = {
   rows: [],
+  rowMap: new Map(),
   records: [],
   inlineGlyphs: {},
+  cidGlyphs: {},
   headIndex: new Map(),
   contextIndex: new Map(),
   cursors: new Map(),
@@ -87,7 +89,7 @@ function normalize(value) {
 
 function codepoints(value) {
   if (isCidToken(value)) {
-    return value;
+    return cidLabel(value);
   }
   return Array.from(value || "")
     .map((char) => `U+${char.codePointAt(0).toString(16).toUpperCase().padStart(4, "0")}`)
@@ -96,6 +98,10 @@ function codepoints(value) {
 
 function isCidToken(value) {
   return /^\(cid:\d+\)$/i.test(value || "");
+}
+
+function stripCidPlaceholders(value) {
+  return (value || "").replace(/\(cid:\d+\)/gi, " ");
 }
 
 function isInlineGlyphChar(char) {
@@ -107,12 +113,38 @@ function isInlineGlyphChar(char) {
   );
 }
 
-function appendRichText(parent, value) {
-  if (isCidToken(value)) {
-    parent.append(document.createTextNode(value));
+function cidLabel(token) {
+  const number = /\d+/.exec(token || "")?.[0] || "";
+  return number ? `PDF 未解碼字 ${number}` : "PDF 未解碼字";
+}
+
+function appendCidGlyph(parent, token) {
+  const path = state.cidGlyphs[token];
+  if (!path) {
+    const span = document.createElement("span");
+    span.className = "cid-fallback";
+    span.textContent = cidLabel(token);
+    parent.append(span);
     return;
   }
-  for (const char of Array.from(value || "")) {
+  const image = document.createElement("img");
+  image.className = "cid-inline-glyph";
+  image.src = path;
+  image.alt = cidLabel(token);
+  image.title = cidLabel(token);
+  image.loading = "lazy";
+  parent.append(image);
+}
+
+function appendRichText(parent, value) {
+  const text = value || "";
+  let offset = 0;
+  for (const match of text.matchAll(/\(cid:\d+\)/gi)) {
+    appendRichText(parent, text.slice(offset, match.index));
+    appendCidGlyph(parent, match[0]);
+    offset = match.index + match[0].length;
+  }
+  for (const char of Array.from(text.slice(offset))) {
     if (isInlineGlyphChar(char)) {
       const glyphPath = state.inlineGlyphs[`U+${char.codePointAt(0).toString(16).toUpperCase()}`];
       const span = document.createElement("span");
@@ -199,6 +231,8 @@ function prepareRows(rows, records) {
   const preparedRows = rows.map((row) => {
     const headCount = headIndex.get(row.token)?.length || 0;
     const contextCount = contextIndex.get(row.token)?.length || 0;
+    const sample = (headIndex.get(row.token) || contextIndex.get(row.token) || [])[0];
+    const sampleRecord = sample?.record;
     let kind = "unlocated";
     if (isCidToken(row.token)) {
       kind = "cid";
@@ -213,6 +247,23 @@ function prepareRows(rows, records) {
       headCount,
       contextCount,
       kind,
+      searchText: normalize(
+        [
+          isCidToken(row.token) ? cidLabel(row.token) : row.token,
+          codepoints(row.token),
+          KIND_LABELS[kind],
+          row.first_book,
+          stripCidPlaceholders(row.first_main),
+          stripCidPlaceholders(row.first_sub),
+          stripCidPlaceholders(row.first_title),
+          stripCidPlaceholders(sampleRecord?.main),
+          stripCidPlaceholders(sampleRecord?.sub),
+          stripCidPlaceholders(sampleRecord?.title),
+          stripCidPlaceholders(sampleRecord?.source),
+          sampleRecord?.period,
+          sample?.fields.map((field) => FIELD_LABELS[field]).join(" "),
+        ].join(" ")
+      ),
     };
   });
 
@@ -246,26 +297,7 @@ function occurrenceFor(row) {
 }
 
 function textForSearch(row) {
-  const occurrence = occurrenceFor(row);
-  const record = occurrence?.record;
-  return normalize(
-    [
-      row.token,
-      row.codepoint,
-      row.category,
-      KIND_LABELS[row.kind],
-      row.first_book,
-      row.first_main,
-      row.first_sub,
-      row.first_title,
-      record?.main,
-      record?.sub,
-      record?.title,
-      record?.source,
-      record?.period,
-      occurrence?.fields.map((field) => FIELD_LABELS[field]).join(" "),
-    ].join(" ")
-  );
+  return row.searchText;
 }
 
 function compareRows(a, b) {
@@ -366,7 +398,7 @@ function renderFilterCard(row) {
   token.title = codepoints(row.token);
 
   const codepoint = node.querySelector(".review-codepoint");
-  codepoint.textContent = `${row.codepoint || codepoints(row.token)} · 清單 ${Number(row.count || 0).toLocaleString("zh-Hant")} 次 · 字頭 ${row.headCount.toLocaleString("zh-Hant")} 例`;
+  codepoint.textContent = `${codepoints(row.token)} · 清單 ${Number(row.count || 0).toLocaleString("zh-Hant")} 次 · 字頭 ${row.headCount.toLocaleString("zh-Hant")} 例`;
 
   const kind = node.querySelector(".pua-kind-pill");
   kind.textContent = KIND_LABELS[row.kind];
@@ -433,7 +465,7 @@ function updateCount() {
 }
 
 function changeOccurrence(token, delta) {
-  const row = state.rows.find((item) => item.token === token);
+  const row = state.rowMap.get(token);
   if (!row) {
     return;
   }
@@ -483,20 +515,23 @@ function wireEvents() {
 
 async function boot() {
   try {
-    const [puaText, records, inlineGlyphs] = await Promise.all([
+    const [puaText, records, inlineGlyphs, cidGlyphs] = await Promise.all([
       loadText("./data/pua_chars.tsv"),
       loadJson("./data/records.json"),
       loadJson("./data/inline_glyphs.json"),
+      loadJson("./data/cid_glyphs.json"),
     ]);
     const rows = parseTsv(puaText);
     state.records = records;
     state.inlineGlyphs = inlineGlyphs;
+    state.cidGlyphs = cidGlyphs;
     const { preparedRows, headIndex, contextIndex } = prepareRows(rows, records);
     state.rows = preparedRows;
+    state.rowMap = new Map(preparedRows.map((row) => [row.token, row]));
     state.headIndex = headIndex;
     state.contextIndex = contextIndex;
     const contextOnly = state.summary.context + state.summary.unlocated;
-    els.meta.textContent = `${state.rows.length.toLocaleString("zh-Hant")} 個 PUA/未編碼項 · ${state.summary.head.toLocaleString("zh-Hant")} 個字頭可定位 · ${state.summary.cid.toLocaleString("zh-Hant")} 個 CID · ${contextOnly.toLocaleString("zh-Hant")} 個僅上下文或未定位 · ${records.length.toLocaleString("zh-Hant")} 筆字形記錄`;
+    els.meta.textContent = `${state.rows.length.toLocaleString("zh-Hant")} 個 PUA/未編碼項 · ${state.summary.head.toLocaleString("zh-Hant")} 個字頭可定位 · ${state.summary.cid.toLocaleString("zh-Hant")} 個 PDF 未解碼 · ${contextOnly.toLocaleString("zh-Hant")} 個僅上下文或未定位 · ${records.length.toLocaleString("zh-Hant")} 筆字形記錄`;
     els.note.textContent = "僅供篩選與定位，不再收集 IDS";
     wireEvents();
     applyFilters();
