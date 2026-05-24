@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>金文字形檢索</title>
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="./assets/fonts/fonts.css" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="topbar">
+        <div>
+          <h1>金文字形檢索</h1>
+          <p id="datasetMeta" class="dataset-meta">正在載入資料...</p>
+        </div>
+        <div class="top-actions">
+          <a id="puaLink" class="meta-link" href="./data/pua_chars.tsv">PUA 清單</a>
+          <div class="lang-control" role="group" aria-label="介面語言">
+            <button class="lang-button active" type="button" data-lang="zh-Hant">繁</button>
+            <button class="lang-button" type="button" data-lang="en">EN</button>
+            <button class="lang-button" type="button" data-lang="ja">日</button>
+          </div>
+        </div>
+      </header>
+
+      <section class="search-panel" aria-label="檢索條件">
+        <div class="search-row">
+          <label class="search-box">
+            <span>字頭檢索</span>
+            <input id="headInput" type="search" autocomplete="off" placeholder="主字頭、子字頭，或部件/IDS" />
+          </label>
+          <label class="search-box">
+            <span>器名 / 來源</span>
+            <input id="objectInput" type="search" autocomplete="off" placeholder="器名、集成號、銘圖號" />
+          </label>
+          <div class="control-stack">
+            <span id="modeLabel">檢索方式</span>
+            <div class="mode-control" role="group" aria-label="檢索方式">
+              <button class="mode-button active" type="button" data-mode="head">字頭</button>
+              <button class="mode-button" type="button" data-mode="component">部件/IDS</button>
+            </div>
+          </div>
+          <div id="scopeStack" class="control-stack">
+            <span id="scopeLabel">字頭範圍</span>
+            <div class="scope-control" role="group" aria-label="字頭範圍">
+              <button class="scope-button active" type="button" data-scope="all">主+子</button>
+              <button class="scope-button" type="button" data-scope="main">主字頭</button>
+              <button class="scope-button" type="button" data-scope="sub">子字頭</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="filter-row">
+          <label>
+            <span>分編</span>
+            <select id="bookFilter"></select>
+          </label>
+          <label>
+            <span>時期</span>
+            <select id="periodFilter"></select>
+          </label>
+          <button id="clearButton" class="clear-button" type="button">清空</button>
+        </div>
+      </section>
+
+      <section class="status-row" aria-live="polite">
+        <div id="resultCount">0 筆結果</div>
+        <div class="status-tools">
+          <div id="puaStatus">PUA/未編碼：0 個</div>
+          <div class="view-control" role="group" aria-label="結果視圖">
+            <button class="view-button active" type="button" data-view="detail">詳細</button>
+            <button class="view-button" type="button" data-view="compact">緊湊</button>
+          </div>
+        </div>
+      </section>
+
+      <section id="results" class="results" aria-label="檢索結果"></section>
+      <div class="load-more-wrap">
+        <button id="loadMoreButton" class="load-more" type="button" hidden>載入更多</button>
+      </div>
+    </main>
+
+    <template id="resultTemplate">
+      <article class="result-card">
+        <div class="glyph-frame">
+          <img class="glyph-image" loading="lazy" alt="" />
+        </div>
+        <div class="result-body">
+          <div class="head-line">
+            <span class="head-token main-token"></span>
+            <span class="head-token sub-token"></span>
+            <span class="period-pill"></span>
+          </div>
+          <h2 class="record-title"></h2>
+          <p class="source-line"></p>
+          <p class="page-line"></p>
+        </div>
+      </article>
+    </template>
+
+    <script src="./app.js" type="module"></script>
+  </body>
+</html>
