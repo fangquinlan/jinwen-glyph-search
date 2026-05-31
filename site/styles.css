@@ -980,11 +980,16 @@ textarea:focus {
   gap: 8px;
 }
 
+.xiesheng-domain-row,
 .phonetic-row,
 .word-row {
   display: grid;
   gap: 8px;
   align-items: end;
+}
+
+.xiesheng-domain-row {
+  grid-template-columns: minmax(160px, 1fr) auto;
 }
 
 .phonetic-row {
@@ -1129,6 +1134,7 @@ textarea:focus {
   .annotation-workbench,
   .annotation-record-panel,
   .annotation-form-grid,
+  .xiesheng-domain-row,
   .phonetic-row,
   .word-row {
     grid-template-columns: 1fr;

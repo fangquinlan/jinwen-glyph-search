@@ -435,6 +435,20 @@ function splitTags(value) {
     .filter(Boolean);
 }
 
+function normalizeXieshengDomains(raw = {}) {
+  const values = [];
+  const multiSource = raw.xieshengDomains || raw.domains || raw.xieshengDomainList || [];
+  if (Array.isArray(multiSource)) {
+    values.push(...multiSource);
+  } else if (multiSource) {
+    values.push(multiSource);
+  }
+  if (raw.xieshengDomain || raw.domain) {
+    values.push(raw.xieshengDomain || raw.domain);
+  }
+  return [...new Set(values.map((value) => compactSpaces(value).toUpperCase()).filter(Boolean))];
+}
+
 function stripCidPlaceholders(value) {
   return (value || "").replace(CID_RE, " ");
 }
@@ -536,6 +550,7 @@ function normalizeAnnotation(raw = {}) {
   const headOverride = raw.headOverride || {};
   const phoneticSource = raw.phoneticInitials || raw.phonetics || [];
   const wordSource = raw.words || [];
+  const xieshengDomains = normalizeXieshengDomains(raw);
   return {
     hidden: Boolean(raw.hidden || raw.omit || raw.suppressed),
     replacedBy: Array.isArray(raw.replacedBy) ? raw.replacedBy.map(compactSpaces).filter(Boolean) : [],
@@ -545,7 +560,8 @@ function normalizeAnnotation(raw = {}) {
     },
     titleOverride: compactSpaces(raw.titleOverride || raw.objectOverride || raw.vesselOverride || ""),
     imageOverride: normalizeImageOverride(raw.imageOverride || raw.glyphImageOverride || raw.imageData || null),
-    xieshengDomain: compactSpaces(raw.xieshengDomain || raw.domain || "").toUpperCase(),
+    xieshengDomain: xieshengDomains[0] || "",
+    xieshengDomains,
     phoneticInitials: Array.isArray(phoneticSource)
       ? phoneticSource
           .map((item) => ({
@@ -577,6 +593,7 @@ function hasAnnotation(annotation) {
         annotation.titleOverride ||
         annotation.imageOverride?.dataUrl ||
         annotation.xieshengDomain ||
+        annotation.xieshengDomains?.length ||
         annotation.phoneticInitials?.length ||
         annotation.semanticComponents?.length ||
         annotation.words?.length ||
@@ -655,6 +672,22 @@ function displayTitle(record) {
 
 function displayImage(record) {
   return record.annotation?.imageOverride?.dataUrl || record.image || EMPTY_GLYPH_IMAGE;
+}
+
+function xieshengDomains(annotation) {
+  return annotation?.xieshengDomains?.length
+    ? annotation.xieshengDomains
+    : annotation?.xieshengDomain
+      ? [annotation.xieshengDomain]
+      : [];
+}
+
+function xieshengDomainText(annotation) {
+  return xieshengDomains(annotation).join("、");
+}
+
+function matchesXieshengDomain(annotation, regex) {
+  return !regex || xieshengDomains(annotation).some((domain) => regex.test(domain));
 }
 
 function phoneticText(annotation) {
@@ -822,7 +855,7 @@ function applyFilters() {
     if (!matchesHeadQuery(record, headTerms) || !matchesObjectQuery(record, objectTerms)) {
       return false;
     }
-    if (domainRegex && !domainRegex.test(record.annotation?.xieshengDomain || "")) {
+    if (domainRegex && !matchesXieshengDomain(record.annotation, domainRegex)) {
       return false;
     }
     return (
@@ -1006,8 +1039,9 @@ function appendAnnotationSummary(parent, annotation) {
   const row = document.createElement("div");
   row.className = "annotation-summary";
 
-  if (annotation.xieshengDomain) {
-    row.append(annotationChip(t("xieshengDomain"), annotation.xieshengDomain));
+  const domainText = xieshengDomainText(annotation);
+  if (domainText) {
+    row.append(annotationChip(t("xieshengDomain"), domainText));
   }
   if (annotation.phoneticInitials?.length) {
     row.append(annotationChip(t("phoneticInitial"), formatPhoneticInitials(annotation.phoneticInitials)));

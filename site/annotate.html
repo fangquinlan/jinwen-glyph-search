@@ -93,10 +93,11 @@
                 <span>校正子字頭</span>
                 <input id="subOverride" type="text" autocomplete="off" placeholder="留空則沿用原子字頭" />
               </label>
-              <label>
+              <div class="field-group full">
                 <span>諧聲域</span>
-                <input id="xieshengDomain" type="text" autocomplete="off" placeholder="大寫字母，如 A" />
-              </label>
+                <div id="xieshengDomainRows" class="dynamic-rows"></div>
+                <button id="addXieshengDomain" class="ghost-button" type="button">新增諧聲域</button>
+              </div>
               <label>
                 <span>義符</span>
                 <input id="semanticComponents" type="text" autocomplete="off" placeholder="多個義符用空格、頓號或逗號分隔" />
@@ -156,6 +157,16 @@
           <span class="annotation-status-pill">未標註</span>
         </span>
       </button>
+    </template>
+
+    <template id="xieshengDomainRowTemplate">
+      <div class="xiesheng-domain-row">
+        <label>
+          <span>諧聲域</span>
+          <input class="xiesheng-domain-input" type="text" autocomplete="off" placeholder="大寫字母，如 A" />
+        </label>
+        <button class="remove-row-button" type="button" data-remove-row>刪除</button>
+      </div>
     </template>
 
     <template id="phoneticRowTemplate">

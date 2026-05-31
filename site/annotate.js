@@ -89,10 +89,11 @@ const els = {
   imageOverrideInput: document.querySelector("#imageOverrideInput"),
   clearImageOverride: document.querySelector("#clearImageOverride"),
   imageOverrideState: document.querySelector("#imageOverrideState"),
-  xieshengDomain: document.querySelector("#xieshengDomain"),
+  xieshengDomainRows: document.querySelector("#xieshengDomainRows"),
   semanticComponents: document.querySelector("#semanticComponents"),
   phoneticRows: document.querySelector("#phoneticRows"),
   wordRows: document.querySelector("#wordRows"),
+  addXieshengDomain: document.querySelector("#addXieshengDomain"),
   addPhonetic: document.querySelector("#addPhonetic"),
   addWord: document.querySelector("#addWord"),
   note: document.querySelector("#annotationNote"),
@@ -100,6 +101,7 @@ const els = {
   previousRecord: document.querySelector("#previousRecord"),
   nextRecord: document.querySelector("#nextRecord"),
   currentSaveState: document.querySelector("#currentSaveState"),
+  xieshengDomainRowTemplate: document.querySelector("#xieshengDomainRowTemplate"),
   phoneticRowTemplate: document.querySelector("#phoneticRowTemplate"),
   wordRowTemplate: document.querySelector("#wordRowTemplate"),
 };
@@ -136,6 +138,20 @@ function splitTags(value) {
 
 function normalize(value) {
   return compactSpaces(value).toLocaleLowerCase();
+}
+
+function normalizeXieshengDomains(raw = {}) {
+  const values = [];
+  const multiSource = raw.xieshengDomains || raw.domains || raw.xieshengDomainList || [];
+  if (Array.isArray(multiSource)) {
+    values.push(...multiSource);
+  } else if (multiSource) {
+    values.push(multiSource);
+  }
+  if (raw.xieshengDomain || raw.domain) {
+    values.push(raw.xieshengDomain || raw.domain);
+  }
+  return [...new Set(values.map((value) => compactSpaces(value).toUpperCase()).filter(Boolean))];
 }
 
 function stripCidPlaceholders(value) {
@@ -210,6 +226,7 @@ function normalizeAnnotation(raw = {}) {
   const headOverride = raw.headOverride || {};
   const phoneticSource = raw.phoneticInitials || raw.phonetics || [];
   const wordSource = raw.words || [];
+  const xieshengDomains = normalizeXieshengDomains(raw);
   return {
     hidden: Boolean(raw.hidden || raw.omit || raw.suppressed),
     replacedBy: Array.isArray(raw.replacedBy) ? raw.replacedBy.map(compactSpaces).filter(Boolean) : [],
@@ -219,7 +236,8 @@ function normalizeAnnotation(raw = {}) {
     },
     titleOverride: compactSpaces(raw.titleOverride || raw.objectOverride || raw.vesselOverride || ""),
     imageOverride: normalizeImageOverride(raw.imageOverride || raw.glyphImageOverride || raw.imageData || null),
-    xieshengDomain: compactSpaces(raw.xieshengDomain || raw.domain || "").toUpperCase(),
+    xieshengDomain: xieshengDomains[0] || "",
+    xieshengDomains,
     phoneticInitials: Array.isArray(phoneticSource)
       ? phoneticSource
           .map((item) => ({
@@ -251,6 +269,7 @@ function hasAnnotation(annotation) {
         annotation.titleOverride ||
         annotation.imageOverride?.dataUrl ||
         annotation.xieshengDomain ||
+        annotation.xieshengDomains?.length ||
         annotation.phoneticInitials?.length ||
         annotation.semanticComponents?.length ||
         annotation.words?.length ||
@@ -296,6 +315,7 @@ function normalizeCreatedRecord(raw = {}, fallbackId = "") {
   const record = raw.record || {};
   const headOverride = raw.headOverride || {};
   const imageOverride = normalizeImageOverride(raw.imageOverride || raw.glyphImageOverride || raw.imageData || null);
+  const xieshengDomains = normalizeXieshengDomains(raw);
   return {
     id,
     baseRecordId: compactSpaces(raw.baseRecordId || record.baseRecordId || ""),
@@ -318,7 +338,8 @@ function normalizeCreatedRecord(raw = {}, fallbackId = "") {
       main: compactSpaces(headOverride.main || raw.mainOverride || ""),
       sub: compactSpaces(headOverride.sub || raw.subOverride || ""),
     },
-    xieshengDomain: compactSpaces(raw.xieshengDomain || raw.domain || "").toUpperCase(),
+    xieshengDomain: xieshengDomains[0] || "",
+    xieshengDomains,
     phoneticInitials: Array.isArray(raw.phoneticInitials || raw.phonetics) ? raw.phoneticInitials || raw.phonetics : [],
     semanticComponents: splitTags(raw.semanticComponents || raw.semantic || []),
     words: Array.isArray(raw.words) ? raw.words : [],
@@ -378,7 +399,7 @@ function annotationText(annotation) {
     annotation.headOverride?.main,
     annotation.headOverride?.sub,
     annotation.titleOverride,
-    annotation.xieshengDomain,
+    ...(annotation.xieshengDomains?.length ? annotation.xieshengDomains : [annotation.xieshengDomain]),
     ...(annotation.semanticComponents || []),
     ...(annotation.phoneticInitials || []).flatMap((item) => [item.primary, ...(item.secondary || [])]),
     ...(annotation.words || []).flatMap((item) => [item.meaning, item.example]),
@@ -615,7 +636,7 @@ function renderEditor() {
   els.titleOverride.value = annotation.titleOverride || "";
   els.mainOverride.value = annotation.headOverride?.main || "";
   els.subOverride.value = annotation.headOverride?.sub || "";
-  els.xieshengDomain.value = annotation.xieshengDomain || "";
+  renderXieshengDomainRows(annotation.xieshengDomains?.length ? annotation.xieshengDomains : [annotation.xieshengDomain || ""]);
   els.semanticComponents.value = (annotation.semanticComponents || []).join(" ");
   els.note.value = annotation.note || "";
   renderPhoneticRows(annotation.phoneticInitials?.length ? annotation.phoneticInitials : [{ primary: "", secondary: [] }]);
@@ -623,6 +644,15 @@ function renderEditor() {
   updateImageOverrideState(annotation);
   updateCurrentSaveState();
   state.renderingEditor = false;
+}
+
+function renderXieshengDomainRows(rows) {
+  els.xieshengDomainRows.replaceChildren();
+  for (const value of rows) {
+    const node = els.xieshengDomainRowTemplate.content.firstElementChild.cloneNode(true);
+    node.querySelector(".xiesheng-domain-input").value = value || "";
+    els.xieshengDomainRows.append(node);
+  }
 }
 
 function renderPhoneticRows(rows) {
@@ -646,6 +676,9 @@ function renderWordRows(rows) {
 }
 
 function annotationFromForm(imageOverride = state.annotations[state.selectedId]?.imageOverride || null) {
+  const xieshengDomains = [...els.xieshengDomainRows.querySelectorAll(".xiesheng-domain-input")]
+    .map((input) => compactSpaces(input.value).toUpperCase())
+    .filter(Boolean);
   const phoneticInitials = [...els.phoneticRows.querySelectorAll(".phonetic-row")]
     .map((row) => ({
       primary: compactSpaces(row.querySelector(".phonetic-primary").value),
@@ -665,7 +698,7 @@ function annotationFromForm(imageOverride = state.annotations[state.selectedId]?
       main: els.mainOverride.value,
       sub: els.subOverride.value,
     },
-    xieshengDomain: els.xieshengDomain.value,
+    xieshengDomains,
     semanticComponents: els.semanticComponents.value,
     phoneticInitials,
     words,
@@ -1080,6 +1113,12 @@ function moveSelection(delta) {
   }
 }
 
+function addXieshengDomainRow() {
+  const node = els.xieshengDomainRowTemplate.content.firstElementChild.cloneNode(true);
+  els.xieshengDomainRows.append(node);
+  node.querySelector("input")?.focus();
+}
+
 function addPhoneticRow() {
   const node = els.phoneticRowTemplate.content.firstElementChild.cloneNode(true);
   els.phoneticRows.append(node);
@@ -1097,7 +1136,7 @@ function handleRowRemove(event) {
   if (!button) {
     return;
   }
-  const row = button.closest(".phonetic-row, .word-row");
+  const row = button.closest(".xiesheng-domain-row, .phonetic-row, .word-row");
   row?.remove();
   captureAnnotation();
 }
@@ -1136,11 +1175,16 @@ function wireEvents() {
   els.form.addEventListener("submit", (event) => event.preventDefault());
   els.form.addEventListener("input", captureAnnotation);
   els.form.addEventListener("click", handleRowRemove);
-  els.xieshengDomain.addEventListener("input", () => {
-    const cursor = els.xieshengDomain.selectionStart;
-    els.xieshengDomain.value = els.xieshengDomain.value.toUpperCase();
-    els.xieshengDomain.setSelectionRange(cursor, cursor);
+  els.xieshengDomainRows.addEventListener("input", (event) => {
+    const input = event.target.closest(".xiesheng-domain-input");
+    if (!input) {
+      return;
+    }
+    const cursor = input.selectionStart;
+    input.value = input.value.toUpperCase();
+    input.setSelectionRange(cursor, cursor);
   });
+  els.addXieshengDomain.addEventListener("click", addXieshengDomainRow);
   els.addPhonetic.addEventListener("click", addPhoneticRow);
   els.addWord.addEventListener("click", addWordRow);
   els.createBlank.addEventListener("click", createBlankRecord);
