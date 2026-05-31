@@ -1025,6 +1025,17 @@ textarea:focus {
   align-items: center;
 }
 
+.source-override-group {
+  gap: 9px;
+}
+
+.source-sync-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+  align-items: center;
+}
+
 .ghost-button:disabled {
   opacity: 0.5;
   cursor: default;

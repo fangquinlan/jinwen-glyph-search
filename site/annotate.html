@@ -85,6 +85,16 @@
                 <span>校正器名</span>
                 <input id="titleOverride" type="text" autocomplete="off" placeholder="留空則沿用原器名" />
               </label>
+              <div class="field-group full source-override-group">
+                <label>
+                  <span>校正器號 / 來源</span>
+                  <input id="sourceOverride" type="text" autocomplete="off" placeholder="留空則沿用原器號 / 來源" />
+                </label>
+                <div class="source-sync-controls">
+                  <button id="syncSourceOverride" class="ghost-button" type="button">同步到同器物字圖</button>
+                  <span id="sourceSyncState" class="annotation-save-state">按原器名、原器號與分編匹配</span>
+                </div>
+              </div>
               <label>
                 <span>校正主字頭</span>
                 <input id="mainOverride" type="text" autocomplete="off" placeholder="留空則沿用原主字頭" />

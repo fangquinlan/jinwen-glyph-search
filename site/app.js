@@ -559,6 +559,7 @@ function normalizeAnnotation(raw = {}) {
       sub: compactSpaces(headOverride.sub || raw.subOverride || ""),
     },
     titleOverride: compactSpaces(raw.titleOverride || raw.objectOverride || raw.vesselOverride || ""),
+    sourceOverride: compactSpaces(raw.sourceOverride || raw.sourceCorrection || raw.sourceIdOverride || raw.referenceOverride || ""),
     imageOverride: normalizeImageOverride(raw.imageOverride || raw.glyphImageOverride || raw.imageData || null),
     xieshengDomain: xieshengDomains[0] || "",
     xieshengDomains,
@@ -591,6 +592,7 @@ function hasAnnotation(annotation) {
         annotation.hidden ||
         annotation.replacedBy?.length ||
         annotation.titleOverride ||
+        annotation.sourceOverride ||
         annotation.imageOverride?.dataUrl ||
         annotation.xieshengDomain ||
         annotation.xieshengDomains?.length ||
@@ -668,6 +670,10 @@ function displaySub(record) {
 
 function displayTitle(record) {
   return record.annotation?.titleOverride || record.title;
+}
+
+function displaySource(record) {
+  return record.annotation?.sourceOverride || record.source;
 }
 
 function displayImage(record) {
@@ -900,6 +906,7 @@ function prepareRecords(records) {
     const main = annotation?.headOverride?.main || record.main;
     const sub = annotation?.headOverride?.sub || record.sub;
     const title = annotation?.titleOverride || record.title;
+    const source = annotation?.sourceOverride || record.source;
     const componentChars = [...new Set(stripCidPlaceholders(record.componentHead).split("").filter((char) => !/\s/.test(char)))];
     return {
       ...record,
@@ -911,7 +918,11 @@ function prepareRecords(records) {
           " "
         )
       ),
-      searchObject: normalize([stripCidPlaceholders(title), stripCidPlaceholders(record.title), stripCidPlaceholders(record.source)].join(" ")),
+      searchObject: normalize(
+        [stripCidPlaceholders(title), stripCidPlaceholders(record.title), stripCidPlaceholders(source), stripCidPlaceholders(record.source)].join(
+          " "
+        )
+      ),
       searchComponent: normalize(
         componentChars
           .map((char) => [char, state.chars[char] || "", state.puaIds[char] || ""].join(" "))
@@ -1017,7 +1028,7 @@ function renderRecord(record) {
 
   node.querySelector(".period-pill").textContent = record.period ? localizedPeriod(record.period) : t("periodMissing");
   setRichText(node.querySelector(".record-title"), displayTitle(record), t("objectMissing"));
-  node.querySelector(".source-line").textContent = record.source || t("sourceMissing");
+  node.querySelector(".source-line").textContent = displaySource(record) || t("sourceMissing");
 
   const pageParts = [record.book ? localizedBook(record.book) : ""].filter(Boolean);
   if (record.group) {
@@ -1087,7 +1098,7 @@ function renderCompactRecord(record) {
     tokenLabel("main", displayMain(record)),
     tokenLabel("sub", displaySub(record)),
     displayTitle(record) || t("objectMissing"),
-    record.source || t("sourceMissing"),
+    displaySource(record) || t("sourceMissing"),
   ].join(" · ");
   node.setAttribute("aria-label", node.title);
 
