@@ -518,7 +518,8 @@ function renderMeta() {
   )} 筆`;
 }
 
-function renderList() {
+function renderList({ preserveScroll = false } = {}) {
+  const previousScrollTop = preserveScroll ? els.list.scrollTop : 0;
   els.list.replaceChildren();
   const visibleRecords = state.filtered.slice(0, state.visible);
   const fragment = document.createDocumentFragment();
@@ -526,6 +527,9 @@ function renderList() {
     fragment.append(renderListItem(record));
   }
   els.list.append(fragment);
+  if (preserveScroll) {
+    els.list.scrollTop = previousScrollTop;
+  }
   els.loadMore.hidden = state.filtered.length <= state.visible;
 }
 
@@ -550,12 +554,22 @@ function renderListItem(record) {
   return node;
 }
 
+function syncListSelection(previousId, nextId) {
+  if (previousId) {
+    els.list.querySelector(`[data-id="${CSS.escape(previousId)}"]`)?.classList.remove("active");
+  }
+  if (nextId) {
+    els.list.querySelector(`[data-id="${CSS.escape(nextId)}"]`)?.classList.add("active");
+  }
+}
+
 function selectRecord(id, { updateHash = true } = {}) {
+  const previousId = state.selectedId;
   state.selectedId = id || "";
   if (updateHash && id) {
     history.replaceState(null, "", `#id=${encodeURIComponent(id)}`);
   }
-  renderList();
+  syncListSelection(previousId, state.selectedId);
   renderEditor();
 }
 
@@ -668,7 +682,7 @@ function saveCurrentAnnotation(annotation) {
   }
   persistDrafts();
   renderMeta();
-  renderList();
+  renderList({ preserveScroll: true });
   refreshSelectedRecordPreview();
   updateImageOverrideState(annotation);
   updateCurrentSaveState();
@@ -954,7 +968,7 @@ function clearCurrentAnnotation() {
   delete state.annotations[state.selectedId];
   persistDrafts();
   renderEditor();
-  renderList();
+  renderList({ preserveScroll: true });
   renderMeta();
 }
 
@@ -1115,7 +1129,7 @@ function wireEvents() {
 
   els.loadMore.addEventListener("click", () => {
     state.visible = Math.min(state.filtered.length, state.visible + BATCH_SIZE);
-    renderList();
+    renderList({ preserveScroll: true });
     renderMeta();
   });
 
