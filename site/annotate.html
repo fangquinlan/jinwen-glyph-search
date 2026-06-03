@@ -129,6 +129,10 @@
                 <span>校正子字頭</span>
                 <input id="subOverride" type="text" autocomplete="off" placeholder="留空則沿用原子字頭" />
               </label>
+              <label>
+                <span>單字年代</span>
+                <select id="periodOverride"></select>
+              </label>
               <div class="field-group full">
                 <span>諧聲域</span>
                 <div id="xieshengDomainRows" class="dynamic-rows"></div>
@@ -198,8 +202,8 @@
     <template id="xieshengDomainRowTemplate">
       <div class="xiesheng-domain-row">
         <label>
-          <span>諧聲域</span>
-          <input class="xiesheng-domain-input" type="text" autocomplete="off" placeholder="大寫字母，如 A" />
+          <span>域碼</span>
+          <input class="xiesheng-domain-input" name="xieshengDomain" type="text" autocomplete="off" placeholder="大寫字母，如 A" />
         </label>
         <button class="remove-row-button" type="button" data-remove-row>刪除</button>
       </div>
@@ -209,11 +213,11 @@
       <div class="phonetic-row">
         <label>
           <span>一級聲首</span>
-          <input class="phonetic-primary" type="text" autocomplete="off" />
+          <input class="phonetic-primary" name="phoneticPrimary" type="text" autocomplete="off" />
         </label>
         <label>
           <span>二級聲首</span>
-          <input class="phonetic-secondary" type="text" autocomplete="off" placeholder="多個用空格、頓號或逗號分隔" />
+          <input class="phonetic-secondary" name="phoneticSecondary" type="text" autocomplete="off" placeholder="多個用空格、頓號或逗號分隔" />
         </label>
         <button class="remove-row-button" type="button" data-remove-row>刪除</button>
       </div>
@@ -223,11 +227,11 @@
       <div class="word-row">
         <label>
           <span>詞義</span>
-          <input class="word-meaning" type="text" autocomplete="off" />
+          <input class="word-meaning" name="wordMeaning" type="text" autocomplete="off" />
         </label>
         <label>
           <span>詞例</span>
-          <input class="word-example" type="text" autocomplete="off" placeholder="此字所在器物中的詞例" />
+          <input class="word-example" name="wordExample" type="text" autocomplete="off" placeholder="此字所在器物中的詞例" />
         </label>
         <button class="remove-row-button" type="button" data-remove-row>刪除</button>
       </div>

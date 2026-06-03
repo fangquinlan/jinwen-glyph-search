@@ -96,6 +96,7 @@ const els = {
   objectStatusSyncState: document.querySelector("#objectStatusSyncState"),
   mainOverride: document.querySelector("#mainOverride"),
   subOverride: document.querySelector("#subOverride"),
+  periodOverride: document.querySelector("#periodOverride"),
   imageOverrideInput: document.querySelector("#imageOverrideInput"),
   clearImageOverride: document.querySelector("#clearImageOverride"),
   imageOverrideState: document.querySelector("#imageOverrideState"),
@@ -169,6 +170,18 @@ function normalizeObjectStatus(value) {
   return ["僞", "疑僞"].includes(status) ? status : "";
 }
 
+function normalizePeriodOverride(raw = {}) {
+  return compactSpaces(
+    raw.periodOverride ||
+      raw.glyphPeriod ||
+      raw.characterPeriod ||
+      raw.singleGlyphPeriod ||
+      raw.dateOverride ||
+      raw.periodCorrection ||
+      ""
+  );
+}
+
 function stripCidPlaceholders(value) {
   return (value || "").replace(CID_RE, " ");
 }
@@ -186,7 +199,7 @@ function periodRank(period) {
 
 function compareRecords(a, b) {
   return (
-    periodRank(a.period) - periodRank(b.period) ||
+    periodRank(displayPeriod(a)) - periodRank(displayPeriod(b)) ||
     (BOOK_RANK.get(a.book) ?? 99) - (BOOK_RANK.get(b.book) ?? 99) ||
     Number(a.group || 0) - Number(b.group || 0) ||
     Number(a.pdfPage || 0) - Number(b.pdfPage || 0) ||
@@ -197,6 +210,10 @@ function compareRecords(a, b) {
 
 function sortedPeriods(values) {
   return [...values].filter(Boolean).sort((a, b) => periodRank(a) - periodRank(b) || a.localeCompare(b, "zh-Hant"));
+}
+
+function periodOptions(values) {
+  return sortedPeriods([...new Set([...(values || []), "秦代"])]);
 }
 
 function setOptions(select, values, allLabel) {
@@ -211,6 +228,16 @@ function setOptions(select, values, allLabel) {
     option.textContent = value;
     select.append(option);
   }
+}
+
+function ensureOption(select, value) {
+  if (!value || [...select.options].some((option) => option.value === value)) {
+    return;
+  }
+  const option = document.createElement("option");
+  option.value = value;
+  option.textContent = value;
+  select.append(option);
 }
 
 function normalizeAnnotationBundle(data) {
@@ -252,6 +279,7 @@ function normalizeAnnotation(raw = {}) {
     titleOverride: compactSpaces(raw.titleOverride || raw.objectOverride || raw.vesselOverride || ""),
     sourceOverride: compactSpaces(raw.sourceOverride || raw.sourceCorrection || raw.sourceIdOverride || raw.referenceOverride || ""),
     objectStatus: normalizeObjectStatus(raw.objectStatus || raw.authenticityStatus || raw.vesselStatus || ""),
+    periodOverride: normalizePeriodOverride(raw),
     imageOverride: normalizeImageOverride(raw.imageOverride || raw.glyphImageOverride || raw.imageData || null),
     xieshengDomain: xieshengDomains[0] || "",
     xieshengDomains,
@@ -286,6 +314,7 @@ function hasAnnotation(annotation) {
         annotation.titleOverride ||
         annotation.sourceOverride ||
         annotation.objectStatus ||
+        annotation.periodOverride ||
         annotation.imageOverride?.dataUrl ||
         annotation.xieshengDomain ||
         annotation.xieshengDomains?.length ||
@@ -354,6 +383,7 @@ function normalizeCreatedRecord(raw = {}, fallbackId = "") {
     titleOverride: compactSpaces(raw.titleOverride || raw.objectOverride || raw.vesselOverride || ""),
     sourceOverride: compactSpaces(raw.sourceOverride || raw.sourceCorrection || raw.sourceIdOverride || raw.referenceOverride || ""),
     objectStatus: normalizeObjectStatus(raw.objectStatus || raw.authenticityStatus || raw.vesselStatus || ""),
+    periodOverride: normalizePeriodOverride(raw),
     imageOverride,
     headOverride: {
       main: compactSpaces(headOverride.main || raw.mainOverride || ""),
@@ -416,6 +446,10 @@ function displayObjectStatus(record) {
   return state.annotations[record.id]?.objectStatus || "";
 }
 
+function displayPeriod(record) {
+  return state.annotations[record.id]?.periodOverride || record.period;
+}
+
 function displayImage(record) {
   return state.annotations[record.id]?.imageOverride?.dataUrl || record.image || EMPTY_GLYPH_IMAGE;
 }
@@ -428,6 +462,7 @@ function annotationText(annotation) {
     annotation.titleOverride,
     annotation.sourceOverride,
     annotation.objectStatus,
+    annotation.periodOverride,
     ...(annotation.xieshengDomains?.length ? annotation.xieshengDomains : [annotation.xieshengDomain]),
     ...(annotation.semanticComponents || []),
     ...(annotation.phoneticInitials || []).flatMap((item) => [item.primary, ...(item.secondary || [])]),
@@ -462,6 +497,7 @@ function recordSearchText(record) {
       stripCidPlaceholders(displaySource(record)),
       stripCidPlaceholders(record.source),
       record.book,
+      displayPeriod(record),
       record.period,
       annotationText(state.annotations[record.id]),
     ].join(" ")
@@ -476,7 +512,7 @@ function applyFilters() {
     if (state.book && record.book !== state.book) {
       return false;
     }
-    if (state.period && record.period !== state.period) {
+    if (state.period && displayPeriod(record) !== state.period) {
       return false;
     }
     const filled = hasAnnotation(state.annotations[record.id]);
@@ -611,7 +647,7 @@ function renderListItem(record) {
   meta.replaceChildren();
   appendRichText(meta, `主:${displayMain(record) || "未標註"} · 子:${displaySub(record) || "未標註"}`);
   meta.append(
-    document.createTextNode(` · ${[record.period || "時期未標註", displaySource(record) || "", displayObjectStatus(record) || ""].filter(Boolean).join(" · ")}`)
+    document.createTextNode(` · ${[displayPeriod(record) || "時期未標註", displaySource(record) || "", displayObjectStatus(record) || ""].filter(Boolean).join(" · ")}`)
   );
   const pill = node.querySelector(".annotation-status-pill");
   const filled = hasAnnotation(state.annotations[record.id]);
@@ -682,8 +718,12 @@ function renderEditor() {
     els.selectedHeads.append(document.createTextNode(" · 器物真僞："));
     els.selectedHeads.append(document.createTextNode(annotation.objectStatus));
   }
+  if (annotation.periodOverride) {
+    els.selectedHeads.append(document.createTextNode(" · 原時期："));
+    els.selectedHeads.append(document.createTextNode(record.period || "未標註"));
+  }
   els.selectedHeads.append(document.createTextNode(` · 記錄 ID：${record.id}`));
-  els.selectedSource.textContent = [displaySource(record), record.period, record.book, displayObjectStatus(record)].filter(Boolean).join(" · ");
+  els.selectedSource.textContent = [displaySource(record), displayPeriod(record), record.book, displayObjectStatus(record)].filter(Boolean).join(" · ");
   els.selectedPages.textContent = [
     record.group ? `第 ${record.group} 組` : "",
     record.pdfPage ? `PDF 第 ${record.pdfPage} 頁` : "",
@@ -697,6 +737,8 @@ function renderEditor() {
   els.objectStatus.value = annotation.objectStatus || "";
   els.mainOverride.value = annotation.headOverride?.main || "";
   els.subOverride.value = annotation.headOverride?.sub || "";
+  ensureOption(els.periodOverride, annotation.periodOverride);
+  els.periodOverride.value = annotation.periodOverride || "";
   renderXieshengDomainRows(annotation.xieshengDomains?.length ? annotation.xieshengDomains : [annotation.xieshengDomain || ""]);
   els.semanticComponents.value = (annotation.semanticComponents || []).join(" ");
   els.note.value = annotation.note || "";
@@ -759,6 +801,7 @@ function annotationFromForm(imageOverride = state.annotations[state.selectedId]?
     titleOverride: els.titleOverride.value,
     sourceOverride: els.sourceOverride.value,
     objectStatus: els.objectStatus.value,
+    periodOverride: els.periodOverride.value,
     headOverride: {
       main: els.mainOverride.value,
       sub: els.subOverride.value,
@@ -796,7 +839,7 @@ function refreshSelectedRecordPreview() {
   els.selectedGlyphImage.src = displayImage(record);
   els.selectedGlyphImage.alt = `${displayMain(record) || ""} ${displaySub(record) || ""} ${displayTitle(record) || ""}`.trim();
   setRichText(els.selectedTitle, displayTitle(record), "器名未標註");
-  els.selectedSource.textContent = [displaySource(record), record.period, record.book, displayObjectStatus(record)].filter(Boolean).join(" · ");
+  els.selectedSource.textContent = [displaySource(record), displayPeriod(record), record.book, displayObjectStatus(record)].filter(Boolean).join(" · ");
 }
 
 function objectSyncKey(record) {
@@ -1377,6 +1420,7 @@ function wireEvents() {
   els.addPhonetic.addEventListener("click", addPhoneticRow);
   els.addWord.addEventListener("click", addWordRow);
   els.objectStatus.addEventListener("change", captureAnnotation);
+  els.periodOverride.addEventListener("change", captureAnnotation);
   els.syncSourceOverride.addEventListener("click", syncSourceOverrideToObject);
   els.syncObjectStatus.addEventListener("click", syncObjectStatusToObject);
   els.createBlank.addEventListener("click", createBlankRecord);
@@ -1426,8 +1470,10 @@ async function boot() {
       ...draftBundle.createdRecords,
     };
 
+    const periods = periodOptions(meta.periods || []);
     setOptions(els.bookFilter, meta.books || [], "全部分編");
-    setOptions(els.periodFilter, sortedPeriods(meta.periods || []), "全部時期");
+    setOptions(els.periodFilter, periods, "全部時期");
+    setOptions(els.periodOverride, periods, "沿用原時期");
     wireEvents();
     applyFilters();
     selectRecord(initialSelectedId(), { updateHash: false });

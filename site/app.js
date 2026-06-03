@@ -111,6 +111,7 @@ const I18N = {
     domainRegexError: "諧聲域正則式無效：{message}",
     xieshengDomain: "諧聲域",
     objectStatus: "器物真僞",
+    singleGlyphPeriod: "單字年代",
     phoneticInitial: "聲首",
     semanticComponent: "義符",
     word: "詞",
@@ -172,6 +173,7 @@ const I18N = {
     domainRegexError: "Invalid xiesheng-domain regex: {message}",
     xieshengDomain: "Xiesheng",
     objectStatus: "Object status",
+    singleGlyphPeriod: "Glyph period",
     phoneticInitial: "Initial",
     semanticComponent: "Semantic",
     word: "Word",
@@ -233,6 +235,7 @@ const I18N = {
     domainRegexError: "諧声域の正規表現が無効です：{message}",
     xieshengDomain: "諧声域",
     objectStatus: "器物状態",
+    singleGlyphPeriod: "字形年代",
     phoneticInitial: "声首",
     semanticComponent: "義符",
     word: "語",
@@ -457,6 +460,18 @@ function normalizeObjectStatus(value) {
   return ["僞", "疑僞"].includes(status) ? status : "";
 }
 
+function normalizePeriodOverride(raw = {}) {
+  return compactSpaces(
+    raw.periodOverride ||
+      raw.glyphPeriod ||
+      raw.characterPeriod ||
+      raw.singleGlyphPeriod ||
+      raw.dateOverride ||
+      raw.periodCorrection ||
+      ""
+  );
+}
+
 function stripCidPlaceholders(value) {
   return (value || "").replace(CID_RE, " ");
 }
@@ -472,6 +487,10 @@ function sortedPeriods(values) {
   });
 }
 
+function periodOptions(values) {
+  return sortedPeriods([...new Set([...(values || []), "秦代"])]);
+}
+
 function periodRank(period) {
   if (!period) {
     return 999;
@@ -481,7 +500,7 @@ function periodRank(period) {
 
 function compareRecords(a, b) {
   return (
-    periodRank(a.period) - periodRank(b.period) ||
+    periodRank(displayPeriod(a)) - periodRank(displayPeriod(b)) ||
     (BOOK_RANK.get(a.book) ?? 99) - (BOOK_RANK.get(b.book) ?? 99) ||
     Number(a.group || 0) - Number(b.group || 0) ||
     Number(a.pdfPage || 0) - Number(b.pdfPage || 0) ||
@@ -569,6 +588,7 @@ function normalizeAnnotation(raw = {}) {
     titleOverride: compactSpaces(raw.titleOverride || raw.objectOverride || raw.vesselOverride || ""),
     sourceOverride: compactSpaces(raw.sourceOverride || raw.sourceCorrection || raw.sourceIdOverride || raw.referenceOverride || ""),
     objectStatus: normalizeObjectStatus(raw.objectStatus || raw.authenticityStatus || raw.vesselStatus || ""),
+    periodOverride: normalizePeriodOverride(raw),
     imageOverride: normalizeImageOverride(raw.imageOverride || raw.glyphImageOverride || raw.imageData || null),
     xieshengDomain: xieshengDomains[0] || "",
     xieshengDomains,
@@ -603,6 +623,7 @@ function hasAnnotation(annotation) {
         annotation.titleOverride ||
         annotation.sourceOverride ||
         annotation.objectStatus ||
+        annotation.periodOverride ||
         annotation.imageOverride?.dataUrl ||
         annotation.xieshengDomain ||
         annotation.xieshengDomains?.length ||
@@ -688,6 +709,10 @@ function displaySource(record) {
 
 function displayObjectStatus(record) {
   return record.annotation?.objectStatus || "";
+}
+
+function displayPeriod(record) {
+  return record.annotation?.periodOverride || record.period;
 }
 
 function displayImage(record) {
@@ -869,7 +894,7 @@ function applyFilters() {
     if (state.book && record.book !== state.book) {
       return false;
     }
-    if (state.period && record.period !== state.period) {
+    if (state.period && displayPeriod(record) !== state.period) {
       return false;
     }
     if (!matchesHeadQuery(record, headTerms) || !matchesObjectQuery(record, objectTerms)) {
@@ -922,6 +947,7 @@ function prepareRecords(records) {
     const title = annotation?.titleOverride || record.title;
     const source = annotation?.sourceOverride || record.source;
     const objectStatus = annotation?.objectStatus || "";
+    const period = annotation?.periodOverride || record.period;
     const componentChars = [...new Set(stripCidPlaceholders(record.componentHead).split("").filter((char) => !/\s/.test(char)))];
     return {
       ...record,
@@ -940,6 +966,8 @@ function prepareRecords(records) {
           stripCidPlaceholders(source),
           stripCidPlaceholders(record.source),
           objectStatus,
+          period,
+          record.period,
         ].join(" ")
       ),
       searchComponent: normalize(
@@ -1045,7 +1073,8 @@ function renderRecord(record) {
   const sub = node.querySelector(".sub-token");
   setTokenLabel(sub, "sub", displaySub(record));
 
-  node.querySelector(".period-pill").textContent = record.period ? localizedPeriod(record.period) : t("periodMissing");
+  const period = displayPeriod(record);
+  node.querySelector(".period-pill").textContent = period ? localizedPeriod(period) : t("periodMissing");
   setRichText(node.querySelector(".record-title"), displayTitle(record), t("objectMissing"));
   node.querySelector(".source-line").textContent = displaySource(record) || t("sourceMissing");
 
@@ -1072,6 +1101,9 @@ function appendAnnotationSummary(parent, annotation) {
   const domainText = xieshengDomainText(annotation);
   if (annotation.objectStatus) {
     row.append(annotationChip(t("objectStatus"), annotation.objectStatus));
+  }
+  if (annotation.periodOverride) {
+    row.append(annotationChip(t("singleGlyphPeriod"), localizedPeriod(annotation.periodOverride)));
   }
   if (domainText) {
     row.append(annotationChip(t("xieshengDomain"), domainText));
@@ -1122,6 +1154,7 @@ function renderCompactRecord(record) {
     displayTitle(record) || t("objectMissing"),
     displaySource(record) || t("sourceMissing"),
     displayObjectStatus(record),
+    displayPeriod(record) ? localizedPeriod(displayPeriod(record)) : "",
   ]
     .filter(Boolean)
     .join(" · ");
@@ -1138,7 +1171,7 @@ function renderCompactRecord(record) {
 
   const period = document.createElement("div");
   period.className = "compact-period";
-  period.textContent = record.period ? localizedPeriod(record.period) : t("periodMissing");
+  period.textContent = displayPeriod(record) ? localizedPeriod(displayPeriod(record)) : t("periodMissing");
 
   node.append(frame, period);
   return node;
@@ -1167,7 +1200,7 @@ function refreshOptions() {
   const currentBook = state.book;
   const currentPeriod = state.period;
   setOptions(els.bookFilter, state.meta.books || [], t("allBooks"), localizedBook);
-  setOptions(els.periodFilter, sortedPeriods(state.meta.periods || []), t("allPeriods"), localizedPeriod);
+  setOptions(els.periodFilter, periodOptions(state.meta.periods || []), t("allPeriods"), localizedPeriod);
   els.bookFilter.value = currentBook;
   els.periodFilter.value = currentPeriod;
 }
