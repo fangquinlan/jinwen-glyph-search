@@ -24,8 +24,20 @@
 
       <section class="review-toolbar annotation-toolbar" aria-label="標註工具">
         <label class="search-box">
+          <span>字頭檢索</span>
+          <input id="annotationHeadSearch" type="search" autocomplete="off" placeholder="主字頭或子字頭" />
+        </label>
+        <label>
+          <span>字頭範圍</span>
+          <select id="annotationHeadScope">
+            <option value="all">全部</option>
+            <option value="main">主字頭</option>
+            <option value="sub">子字頭</option>
+          </select>
+        </label>
+        <label class="search-box">
           <span>定位字圖</span>
-          <input id="annotationSearch" type="search" autocomplete="off" placeholder="字頭、器名、來源、記錄 ID" />
+          <input id="annotationSearch" type="search" autocomplete="off" placeholder="器名、來源、記錄 ID、標註" />
         </label>
         <label>
           <span>分編</span>

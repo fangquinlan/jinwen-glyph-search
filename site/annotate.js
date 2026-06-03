@@ -46,6 +46,8 @@ const state = {
   meta: null,
   filtered: [],
   selectedId: "",
+  headQuery: "",
+  headScope: "all",
   query: "",
   book: "",
   period: "",
@@ -59,6 +61,8 @@ const EMPTY_GLYPH_IMAGE =
 
 const els = {
   meta: document.querySelector("#annotationMeta"),
+  headSearch: document.querySelector("#annotationHeadSearch"),
+  headScope: document.querySelector("#annotationHeadScope"),
   search: document.querySelector("#annotationSearch"),
   bookFilter: document.querySelector("#annotationBookFilter"),
   periodFilter: document.querySelector("#annotationPeriodFilter"),
@@ -421,8 +425,6 @@ function annotationText(annotation) {
     return "";
   }
   return [
-    annotation.headOverride?.main,
-    annotation.headOverride?.sub,
     annotation.titleOverride,
     annotation.sourceOverride,
     annotation.objectStatus,
@@ -436,14 +438,25 @@ function annotationText(annotation) {
     .join(" ");
 }
 
+function headSearchText(record, scope = state.headScope) {
+  const parts = [];
+  if (scope === "all" || scope === "main") {
+    parts.push(displayMain(record), record.main);
+  }
+  if (scope === "all" || scope === "sub") {
+    parts.push(displaySub(record), record.sub);
+  }
+  return normalize(parts.map(stripCidPlaceholders).join(" "));
+}
+
+function matchesHeadQuery(record, terms) {
+  return !terms.length || terms.every((term) => headSearchText(record).includes(term));
+}
+
 function recordSearchText(record) {
   return normalize(
     [
       record.id,
-      stripCidPlaceholders(record.main),
-      stripCidPlaceholders(record.sub),
-      stripCidPlaceholders(displayMain(record)),
-      stripCidPlaceholders(displaySub(record)),
       stripCidPlaceholders(displayTitle(record)),
       stripCidPlaceholders(record.title),
       stripCidPlaceholders(displaySource(record)),
@@ -457,6 +470,7 @@ function recordSearchText(record) {
 
 function applyFilters() {
   rebuildRecords();
+  const headTerms = normalize(state.headQuery).split(/\s+/).filter(Boolean);
   const terms = normalize(state.query).split(/\s+/).filter(Boolean);
   state.filtered = state.records.filter((record) => {
     if (state.book && record.book !== state.book) {
@@ -470,6 +484,9 @@ function applyFilters() {
       return false;
     }
     if (state.progress === "empty" && filled) {
+      return false;
+    }
+    if (!matchesHeadQuery(record, headTerms)) {
       return false;
     }
     const text = recordSearchText(record);
@@ -1302,6 +1319,18 @@ function handleRowRemove(event) {
 }
 
 function wireEvents() {
+  els.headSearch.addEventListener("input", () => {
+    state.headQuery = els.headSearch.value;
+    state.visible = BATCH_SIZE;
+    applyFilters();
+  });
+
+  els.headScope.addEventListener("change", () => {
+    state.headScope = els.headScope.value || "all";
+    state.visible = BATCH_SIZE;
+    applyFilters();
+  });
+
   els.search.addEventListener("input", () => {
     state.query = els.search.value;
     state.visible = BATCH_SIZE;

@@ -797,7 +797,14 @@ select:focus {
 }
 
 .annotation-toolbar {
-  grid-template-columns: minmax(240px, 1fr) minmax(140px, 190px) minmax(140px, 190px) minmax(150px, 190px) auto;
+  grid-template-columns:
+    minmax(170px, 0.8fr)
+    minmax(110px, 150px)
+    minmax(220px, 1fr)
+    minmax(120px, 170px)
+    minmax(120px, 170px)
+    minmax(130px, 170px)
+    auto;
 }
 
 .annotation-workbench {
