@@ -798,13 +798,24 @@ select:focus {
 
 .annotation-toolbar {
   grid-template-columns:
-    minmax(170px, 0.8fr)
-    minmax(110px, 150px)
+    minmax(220px, 1.1fr)
+    minmax(118px, 150px)
     minmax(220px, 1fr)
-    minmax(120px, 170px)
-    minmax(120px, 170px)
     minmax(130px, 170px)
-    auto;
+    minmax(130px, 170px)
+    minmax(130px, 170px);
+}
+
+.annotation-actions {
+  grid-column: 1 / -1;
+  justify-content: flex-end;
+  padding-top: 2px;
+}
+
+.annotation-actions .ghost-button,
+.annotation-actions .import-button {
+  min-width: 112px;
+  justify-content: center;
 }
 
 .annotation-workbench {

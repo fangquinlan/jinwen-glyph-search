@@ -23,11 +23,11 @@
       </header>
 
       <section class="review-toolbar annotation-toolbar" aria-label="標註工具">
-        <label class="search-box">
+        <label class="search-box annotation-head-field">
           <span>字頭檢索</span>
           <input id="annotationHeadSearch" type="search" autocomplete="off" placeholder="主字頭或子字頭" />
         </label>
-        <label>
+        <label class="annotation-head-scope-field">
           <span>字頭範圍</span>
           <select id="annotationHeadScope">
             <option value="all">全部</option>
@@ -35,19 +35,19 @@
             <option value="sub">子字頭</option>
           </select>
         </label>
-        <label class="search-box">
+        <label class="search-box annotation-locate-field">
           <span>定位字圖</span>
           <input id="annotationSearch" type="search" autocomplete="off" placeholder="器名、來源、記錄 ID、標註" />
         </label>
-        <label>
+        <label class="annotation-book-field">
           <span>分編</span>
           <select id="annotationBookFilter"></select>
         </label>
-        <label>
+        <label class="annotation-period-field">
           <span>時期</span>
           <select id="annotationPeriodFilter"></select>
         </label>
-        <label>
+        <label class="annotation-progress-field">
           <span>進度</span>
           <select id="annotationProgressFilter">
             <option value="all">全部</option>
@@ -55,7 +55,7 @@
             <option value="empty">未標註</option>
           </select>
         </label>
-        <div class="review-actions">
+        <div class="review-actions annotation-actions">
           <label class="import-button">
             匯入 JSON
             <input id="annotationImport" type="file" accept="application/json,.json" />
