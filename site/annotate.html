@@ -95,6 +95,20 @@
                   <span id="sourceSyncState" class="annotation-save-state">按原器名、原器號與分編匹配</span>
                 </div>
               </div>
+              <div class="field-group full object-status-group">
+                <label>
+                  <span>器物真僞</span>
+                  <select id="objectStatus">
+                    <option value="">未標記</option>
+                    <option value="僞">僞</option>
+                    <option value="疑僞">疑僞</option>
+                  </select>
+                </label>
+                <div class="object-status-sync-controls">
+                  <button id="syncObjectStatus" class="ghost-button" type="button">同步到同器物字圖</button>
+                  <span id="objectStatusSyncState" class="annotation-save-state">按原器名、原器號與分編匹配</span>
+                </div>
+              </div>
               <label>
                 <span>校正主字頭</span>
                 <input id="mainOverride" type="text" autocomplete="off" placeholder="留空則沿用原主字頭" />

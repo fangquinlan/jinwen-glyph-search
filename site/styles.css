@@ -1025,11 +1025,13 @@ textarea:focus {
   align-items: center;
 }
 
-.source-override-group {
+.source-override-group,
+.object-status-group {
   gap: 9px;
 }
 
-.source-sync-controls {
+.source-sync-controls,
+.object-status-sync-controls {
   display: flex;
   flex-wrap: wrap;
   gap: 9px;

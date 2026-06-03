@@ -87,6 +87,9 @@ const els = {
   sourceOverride: document.querySelector("#sourceOverride"),
   syncSourceOverride: document.querySelector("#syncSourceOverride"),
   sourceSyncState: document.querySelector("#sourceSyncState"),
+  objectStatus: document.querySelector("#objectStatus"),
+  syncObjectStatus: document.querySelector("#syncObjectStatus"),
+  objectStatusSyncState: document.querySelector("#objectStatusSyncState"),
   mainOverride: document.querySelector("#mainOverride"),
   subOverride: document.querySelector("#subOverride"),
   imageOverrideInput: document.querySelector("#imageOverrideInput"),
@@ -155,6 +158,11 @@ function normalizeXieshengDomains(raw = {}) {
     values.push(raw.xieshengDomain || raw.domain);
   }
   return [...new Set(values.map((value) => compactSpaces(value).toUpperCase()).filter(Boolean))];
+}
+
+function normalizeObjectStatus(value) {
+  const status = compactSpaces(value).replace(/偽|伪/g, "僞");
+  return ["僞", "疑僞"].includes(status) ? status : "";
 }
 
 function stripCidPlaceholders(value) {
@@ -239,6 +247,7 @@ function normalizeAnnotation(raw = {}) {
     },
     titleOverride: compactSpaces(raw.titleOverride || raw.objectOverride || raw.vesselOverride || ""),
     sourceOverride: compactSpaces(raw.sourceOverride || raw.sourceCorrection || raw.sourceIdOverride || raw.referenceOverride || ""),
+    objectStatus: normalizeObjectStatus(raw.objectStatus || raw.authenticityStatus || raw.vesselStatus || ""),
     imageOverride: normalizeImageOverride(raw.imageOverride || raw.glyphImageOverride || raw.imageData || null),
     xieshengDomain: xieshengDomains[0] || "",
     xieshengDomains,
@@ -272,6 +281,7 @@ function hasAnnotation(annotation) {
         annotation.replacedBy?.length ||
         annotation.titleOverride ||
         annotation.sourceOverride ||
+        annotation.objectStatus ||
         annotation.imageOverride?.dataUrl ||
         annotation.xieshengDomain ||
         annotation.xieshengDomains?.length ||
@@ -339,6 +349,7 @@ function normalizeCreatedRecord(raw = {}, fallbackId = "") {
     },
     titleOverride: compactSpaces(raw.titleOverride || raw.objectOverride || raw.vesselOverride || ""),
     sourceOverride: compactSpaces(raw.sourceOverride || raw.sourceCorrection || raw.sourceIdOverride || raw.referenceOverride || ""),
+    objectStatus: normalizeObjectStatus(raw.objectStatus || raw.authenticityStatus || raw.vesselStatus || ""),
     imageOverride,
     headOverride: {
       main: compactSpaces(headOverride.main || raw.mainOverride || ""),
@@ -397,6 +408,10 @@ function displaySource(record) {
   return state.annotations[record.id]?.sourceOverride || record.source;
 }
 
+function displayObjectStatus(record) {
+  return state.annotations[record.id]?.objectStatus || "";
+}
+
 function displayImage(record) {
   return state.annotations[record.id]?.imageOverride?.dataUrl || record.image || EMPTY_GLYPH_IMAGE;
 }
@@ -410,6 +425,7 @@ function annotationText(annotation) {
     annotation.headOverride?.sub,
     annotation.titleOverride,
     annotation.sourceOverride,
+    annotation.objectStatus,
     ...(annotation.xieshengDomains?.length ? annotation.xieshengDomains : [annotation.xieshengDomain]),
     ...(annotation.semanticComponents || []),
     ...(annotation.phoneticInitials || []).flatMap((item) => [item.primary, ...(item.secondary || [])]),
@@ -577,7 +593,9 @@ function renderListItem(record) {
   const meta = node.querySelector(".annotation-item-meta");
   meta.replaceChildren();
   appendRichText(meta, `主:${displayMain(record) || "未標註"} · 子:${displaySub(record) || "未標註"}`);
-  meta.append(document.createTextNode(` · ${[record.period || "時期未標註", displaySource(record) || ""].filter(Boolean).join(" · ")}`));
+  meta.append(
+    document.createTextNode(` · ${[record.period || "時期未標註", displaySource(record) || "", displayObjectStatus(record) || ""].filter(Boolean).join(" · ")}`)
+  );
   const pill = node.querySelector(".annotation-status-pill");
   const filled = hasAnnotation(state.annotations[record.id]);
   pill.classList.toggle("filled", filled);
@@ -614,9 +632,11 @@ function renderEditor() {
   els.splitCurrent.disabled = !record;
   els.deleteCreated.disabled = !record?.isCreated;
   els.syncSourceOverride.disabled = !record;
+  els.syncObjectStatus.disabled = !record;
   if (!record) {
     els.currentSaveState.textContent = "尚未選擇";
     updateSourceSyncState();
+    updateObjectStatusSyncState();
     return;
   }
 
@@ -641,8 +661,12 @@ function renderEditor() {
     els.selectedHeads.append(document.createTextNode(" · 原器號："));
     appendRichText(els.selectedHeads, record.source || "未標註");
   }
+  if (annotation.objectStatus) {
+    els.selectedHeads.append(document.createTextNode(" · 器物真僞："));
+    els.selectedHeads.append(document.createTextNode(annotation.objectStatus));
+  }
   els.selectedHeads.append(document.createTextNode(` · 記錄 ID：${record.id}`));
-  els.selectedSource.textContent = [displaySource(record), record.period, record.book].filter(Boolean).join(" · ");
+  els.selectedSource.textContent = [displaySource(record), record.period, record.book, displayObjectStatus(record)].filter(Boolean).join(" · ");
   els.selectedPages.textContent = [
     record.group ? `第 ${record.group} 組` : "",
     record.pdfPage ? `PDF 第 ${record.pdfPage} 頁` : "",
@@ -653,6 +677,7 @@ function renderEditor() {
 
   els.titleOverride.value = annotation.titleOverride || "";
   els.sourceOverride.value = annotation.sourceOverride || "";
+  els.objectStatus.value = annotation.objectStatus || "";
   els.mainOverride.value = annotation.headOverride?.main || "";
   els.subOverride.value = annotation.headOverride?.sub || "";
   renderXieshengDomainRows(annotation.xieshengDomains?.length ? annotation.xieshengDomains : [annotation.xieshengDomain || ""]);
@@ -662,6 +687,7 @@ function renderEditor() {
   renderWordRows(annotation.words?.length ? annotation.words : [{ meaning: "", example: "" }]);
   updateImageOverrideState(annotation);
   updateSourceSyncState();
+  updateObjectStatusSyncState();
   updateCurrentSaveState();
   state.renderingEditor = false;
 }
@@ -715,6 +741,7 @@ function annotationFromForm(imageOverride = state.annotations[state.selectedId]?
   return normalizeAnnotation({
     titleOverride: els.titleOverride.value,
     sourceOverride: els.sourceOverride.value,
+    objectStatus: els.objectStatus.value,
     headOverride: {
       main: els.mainOverride.value,
       sub: els.subOverride.value,
@@ -740,6 +767,7 @@ function saveCurrentAnnotation(annotation) {
   refreshSelectedRecordPreview();
   updateImageOverrideState(annotation);
   updateSourceSyncState();
+  updateObjectStatusSyncState();
   updateCurrentSaveState();
 }
 
@@ -751,7 +779,7 @@ function refreshSelectedRecordPreview() {
   els.selectedGlyphImage.src = displayImage(record);
   els.selectedGlyphImage.alt = `${displayMain(record) || ""} ${displaySub(record) || ""} ${displayTitle(record) || ""}`.trim();
   setRichText(els.selectedTitle, displayTitle(record), "器名未標註");
-  els.selectedSource.textContent = [displaySource(record), record.period, record.book].filter(Boolean).join(" · ");
+  els.selectedSource.textContent = [displaySource(record), record.period, record.book, displayObjectStatus(record)].filter(Boolean).join(" · ");
 }
 
 function objectSyncKey(record) {
@@ -779,6 +807,21 @@ function updateSourceSyncState() {
   const matches = objectSyncMatches(record);
   els.syncSourceOverride.disabled = matches.length <= 1;
   els.sourceSyncState.textContent =
+    matches.length > 1
+      ? `可同步 ${formatNumber(matches.length)} 筆同器物字圖`
+      : "未找到可同步的同器物字圖";
+}
+
+function updateObjectStatusSyncState() {
+  const record = state.recordMap.get(state.selectedId);
+  if (!record) {
+    els.objectStatusSyncState.textContent = "尚未選擇字圖";
+    els.syncObjectStatus.disabled = true;
+    return;
+  }
+  const matches = objectSyncMatches(record);
+  els.syncObjectStatus.disabled = matches.length <= 1;
+  els.objectStatusSyncState.textContent =
     matches.length > 1
       ? `可同步 ${formatNumber(matches.length)} 筆同器物字圖`
       : "未找到可同步的同器物字圖";
@@ -1090,6 +1133,38 @@ function syncSourceOverrideToObject() {
   els.saveState.textContent = `已同步 ${formatNumber(matches.length)} 筆同器物字圖；分享前請導出 JSON。`;
 }
 
+function syncObjectStatusToObject() {
+  const record = state.recordMap.get(state.selectedId);
+  if (!record) {
+    return;
+  }
+  const selectedId = state.selectedId;
+  const objectStatus = normalizeObjectStatus(els.objectStatus.value);
+  const matches = objectSyncMatches(record);
+  if (matches.length <= 1) {
+    updateObjectStatusSyncState();
+    return;
+  }
+  for (const item of matches) {
+    const annotation = normalizeAnnotation({
+      ...(state.annotations[item.id] || {}),
+      objectStatus,
+    });
+    if (hasAnnotation(annotation)) {
+      state.annotations[item.id] = annotation;
+    } else {
+      delete state.annotations[item.id];
+    }
+  }
+  persistDrafts();
+  applyFilters();
+  const nextId = state.filtered.some((item) => item.id === selectedId) ? selectedId : state.selectedId;
+  if (nextId) {
+    selectRecord(nextId, { updateHash: false });
+  }
+  els.saveState.textContent = `已同步 ${formatNumber(matches.length)} 筆同器物真僞標記；分享前請導出 JSON。`;
+}
+
 function derivedId(prefix = "created") {
   const stamp = Date.now().toString(36);
   const random = Math.random().toString(36).slice(2, 8);
@@ -1272,7 +1347,9 @@ function wireEvents() {
   els.addXieshengDomain.addEventListener("click", addXieshengDomainRow);
   els.addPhonetic.addEventListener("click", addPhoneticRow);
   els.addWord.addEventListener("click", addWordRow);
+  els.objectStatus.addEventListener("change", captureAnnotation);
   els.syncSourceOverride.addEventListener("click", syncSourceOverrideToObject);
+  els.syncObjectStatus.addEventListener("click", syncObjectStatusToObject);
   els.createBlank.addEventListener("click", createBlankRecord);
   els.copyCurrent.addEventListener("click", copyCurrentRecord);
   els.splitCurrent.addEventListener("click", splitCurrentRecord);

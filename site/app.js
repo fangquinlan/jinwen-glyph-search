@@ -110,6 +110,7 @@ const I18N = {
     wordPlaceholder: "詞義或詞例",
     domainRegexError: "諧聲域正則式無效：{message}",
     xieshengDomain: "諧聲域",
+    objectStatus: "器物真僞",
     phoneticInitial: "聲首",
     semanticComponent: "義符",
     word: "詞",
@@ -170,6 +171,7 @@ const I18N = {
     wordPlaceholder: "Meaning or example",
     domainRegexError: "Invalid xiesheng-domain regex: {message}",
     xieshengDomain: "Xiesheng",
+    objectStatus: "Object status",
     phoneticInitial: "Initial",
     semanticComponent: "Semantic",
     word: "Word",
@@ -230,6 +232,7 @@ const I18N = {
     wordPlaceholder: "語義または用例",
     domainRegexError: "諧声域の正規表現が無効です：{message}",
     xieshengDomain: "諧声域",
+    objectStatus: "器物状態",
     phoneticInitial: "声首",
     semanticComponent: "義符",
     word: "語",
@@ -449,6 +452,11 @@ function normalizeXieshengDomains(raw = {}) {
   return [...new Set(values.map((value) => compactSpaces(value).toUpperCase()).filter(Boolean))];
 }
 
+function normalizeObjectStatus(value) {
+  const status = compactSpaces(value).replace(/偽|伪/g, "僞");
+  return ["僞", "疑僞"].includes(status) ? status : "";
+}
+
 function stripCidPlaceholders(value) {
   return (value || "").replace(CID_RE, " ");
 }
@@ -560,6 +568,7 @@ function normalizeAnnotation(raw = {}) {
     },
     titleOverride: compactSpaces(raw.titleOverride || raw.objectOverride || raw.vesselOverride || ""),
     sourceOverride: compactSpaces(raw.sourceOverride || raw.sourceCorrection || raw.sourceIdOverride || raw.referenceOverride || ""),
+    objectStatus: normalizeObjectStatus(raw.objectStatus || raw.authenticityStatus || raw.vesselStatus || ""),
     imageOverride: normalizeImageOverride(raw.imageOverride || raw.glyphImageOverride || raw.imageData || null),
     xieshengDomain: xieshengDomains[0] || "",
     xieshengDomains,
@@ -593,6 +602,7 @@ function hasAnnotation(annotation) {
         annotation.replacedBy?.length ||
         annotation.titleOverride ||
         annotation.sourceOverride ||
+        annotation.objectStatus ||
         annotation.imageOverride?.dataUrl ||
         annotation.xieshengDomain ||
         annotation.xieshengDomains?.length ||
@@ -674,6 +684,10 @@ function displayTitle(record) {
 
 function displaySource(record) {
   return record.annotation?.sourceOverride || record.source;
+}
+
+function displayObjectStatus(record) {
+  return record.annotation?.objectStatus || "";
 }
 
 function displayImage(record) {
@@ -907,6 +921,7 @@ function prepareRecords(records) {
     const sub = annotation?.headOverride?.sub || record.sub;
     const title = annotation?.titleOverride || record.title;
     const source = annotation?.sourceOverride || record.source;
+    const objectStatus = annotation?.objectStatus || "";
     const componentChars = [...new Set(stripCidPlaceholders(record.componentHead).split("").filter((char) => !/\s/.test(char)))];
     return {
       ...record,
@@ -919,9 +934,13 @@ function prepareRecords(records) {
         )
       ),
       searchObject: normalize(
-        [stripCidPlaceholders(title), stripCidPlaceholders(record.title), stripCidPlaceholders(source), stripCidPlaceholders(record.source)].join(
-          " "
-        )
+        [
+          stripCidPlaceholders(title),
+          stripCidPlaceholders(record.title),
+          stripCidPlaceholders(source),
+          stripCidPlaceholders(record.source),
+          objectStatus,
+        ].join(" ")
       ),
       searchComponent: normalize(
         componentChars
@@ -1051,6 +1070,9 @@ function appendAnnotationSummary(parent, annotation) {
   row.className = "annotation-summary";
 
   const domainText = xieshengDomainText(annotation);
+  if (annotation.objectStatus) {
+    row.append(annotationChip(t("objectStatus"), annotation.objectStatus));
+  }
   if (domainText) {
     row.append(annotationChip(t("xieshengDomain"), domainText));
   }
@@ -1099,7 +1121,10 @@ function renderCompactRecord(record) {
     tokenLabel("sub", displaySub(record)),
     displayTitle(record) || t("objectMissing"),
     displaySource(record) || t("sourceMissing"),
-  ].join(" · ");
+    displayObjectStatus(record),
+  ]
+    .filter(Boolean)
+    .join(" · ");
   node.setAttribute("aria-label", node.title);
 
   const frame = document.createElement("div");
